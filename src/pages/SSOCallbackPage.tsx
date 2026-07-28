@@ -38,7 +38,7 @@ const SSOCallbackPage = () => {
 
       if (!tokenRes.ok) {
         const err = await tokenRes.json().catch(() => ({}))
-        throw new Error(err.message || `Token exchange failed (${tokenRes.status})`)
+        throw new Error(err.message || err.error_description || `Token exchange failed (${tokenRes.status})`)
       }
 
       const data = await tokenRes.json()
