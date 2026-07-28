@@ -5,6 +5,7 @@ import BottomNav from './components/BottomNav'
 import ProtectedRoute from './components/ProtectedRoute'
 import WelcomePage from './pages/WelcomePage'
 import SSOCallbackPage from './pages/SSOCallbackPage'
+import AIChatHome from './pages/AIChatHome'
 import Dashboard from './pages/Dashboard'
 import IDRegistration from './pages/IDRegistration'
 import DocumentUpload from './pages/DocumentUpload'
@@ -25,7 +26,8 @@ function App() {
         <Routes>
           <Route path="/" element={<WelcomePage />} />
           <Route path="/egovph/sso" element={<SSOCallbackPage />} />
-          <Route path="/home" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/home" element={<ProtectedRoute><AIChatHome /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/services" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/activity" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
