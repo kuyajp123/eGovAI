@@ -11,7 +11,6 @@ const FaceLivenessPage = () => {
   const [searchParams] = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [livenessUrl, setLivenessUrl] = useState('')
   const [sessionToken, setSessionToken] = useState('')
 
   // Check if returning from liveness verification
@@ -65,7 +64,6 @@ const FaceLivenessPage = () => {
       const session = await createRedirectSession(callbackUrl, 3000)
 
       setSessionToken(session.token)
-      setLivenessUrl(session.url)
 
       // Redirect to liveness verification
       window.location.href = session.url
