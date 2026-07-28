@@ -18,17 +18,6 @@ const ProfilePage = () => {
     .join('')
     .toUpperCase()
 
-  // Build full address
-  const addressParts = [
-    user.address?.street,
-    user.address?.barangay,
-    user.address?.city,
-    user.address?.province,
-    user.address?.region,
-    user.address?.zipCode,
-  ].filter(Boolean)
-  const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : 'No address on file'
-
   // Format dates
   const formatDate = (dateStr: string) => {
     if (!dateStr) return 'N/A'
