@@ -1,7 +1,9 @@
 const EGovSignInButton = () => {
   const handleSignIn = () => {
-    // Show instructions for production use
-    alert('To test SSO: Use the eGovPH portal to generate an exchange code, then access the callback URL:\n\nhttps://e-gov-ai.vercel.app/egovph/sso?exchange_code=YOUR_CODE')
+    const code = prompt('Enter eGovPH exchange code (from Postman or test portal):')
+    if (code?.trim()) {
+      window.location.href = `/egovph/sso?exchange_code=${code.trim()}`
+    }
   }
 
   return (

@@ -1,13 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import {
-  exchangeCodeForUserData,
-  findExistingUser,
-  registerUser,
-  bindUniqidToUser,
-  updateLastLogin,
-} from '../services/egovService'
+import { User } from '../types/user'
 
 const SSOCallbackPage = () => {
   const [searchParams] = useSearchParams()
@@ -26,51 +20,61 @@ const SSOCallbackPage = () => {
 
       if (!exchangeCode) {
         setStatus('error')
-        setErrorMessage('Missing authentication code')
+        setErrorMessage('Missing exchange_code parameter')
         return
       }
 
-      // Step 1: Exchange code for user data
-      setStatus('processing')
-      const exchangeResponse = await exchangeCodeForUserData(exchangeCode)
+      // Exchange code for SSO-scoped access token
+      const tokenRes = await fetch('/egov-api/api/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exchange_code: exchangeCode,
+          scope: 'SSO_AUTHENTICATION',
+          partner_code: import.meta.env.VITE_EGOV_PARTNER_CODE,
+          partner_secret: import.meta.env.VITE_EGOV_PARTNER_SECRET,
+        }),
+      })
 
-      if (!exchangeResponse.success || !exchangeResponse.data) {
-        setStatus('error')
-        setErrorMessage('Failed to authenticate with eGovPH')
-        return
+      if (!tokenRes.ok) {
+        const err = await tokenRes.json().catch(() => ({}))
+        throw new Error(err.message || `Token exchange failed (${tokenRes.status})`)
       }
 
-      const egovUser = exchangeResponse.data
+      const data = await tokenRes.json()
+      console.log('SSO token response:', data)
 
-      // Step 2: Check if user exists
-      const existingUser = await findExistingUser(egovUser)
-
-      let user
-      if (existingUser) {
-        // Existing user - bind uniqid if not already bound
-        if (existingUser.uniqid !== egovUser.uniqid) {
-          await bindUniqidToUser(existingUser.id, egovUser.uniqid)
-        }
-        user = { ...existingUser, ...egovUser }
-      } else {
-        // New user - register
-        user = await registerUser(egovUser)
+      // Build user from response — map whatever fields eGov returns
+      const user: User = {
+        id: data.uniqid || data.user_id || data.id || exchangeCode,
+        uniqid: data.uniqid || data.user_id || data.id || '',
+        firstName: data.first_name || data.firstName || '',
+        middleName: data.middle_name || data.middleName,
+        lastName: data.last_name || data.lastName || '',
+        suffix: data.suffix,
+        birthdate: data.birthdate || data.birth_date || '',
+        email: data.email || '',
+        mobileNumber: data.mobile_number || data.mobileNumber || data.phone || '',
+        address: {
+          street: data.address?.street,
+          barangay: data.address?.barangay,
+          city: data.address?.city || '',
+          province: data.address?.province || '',
+          region: data.address?.region || '',
+          zipCode: data.address?.zip_code || data.address?.zipCode,
+        },
+        registeredAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        profileLocked: true,
+        ssoProvider: 'egovph',
       }
 
-      // Step 3: Update last login
-      await updateLastLogin(user.id)
-
-      // Step 4: Auto-login
       login(user)
-
-      // Step 5: Redirect to home
-      setTimeout(() => {
-        navigate('/home', { replace: true })
-      }, 1000)
+      navigate('/home', { replace: true })
     } catch (error) {
       console.error('SSO callback error:', error)
       setStatus('error')
-      setErrorMessage('An unexpected error occurred during authentication')
+      setErrorMessage(error instanceof Error ? error.message : 'Authentication failed')
     }
   }
 
