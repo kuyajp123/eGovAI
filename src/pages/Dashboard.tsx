@@ -8,7 +8,7 @@ const Dashboard = () => {
 {/* Quick Actions — Pay Taxes & Business Permit */}
 <section className="mb-xl">
 <h3 className="font-title-lg text-title-lg text-on-surface mb-md">Quick Services</h3>
-<div className="grid grid-cols-2 md:grid-cols-4 gap-md">
+<div className="grid grid-cols-2 md:grid-cols-5 gap-md">
   <Link to="/services" className="group p-md rounded-2xl bg-gradient-to-br from-primary to-secondary text-white flex flex-col items-center text-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
     <span className="material-symbols-outlined text-3xl" style={{fontVariationSettings:"'FILL' 1"}}>add_business</span>
     <span className="text-xs font-bold">Business Permit</span>
@@ -18,6 +18,11 @@ const Dashboard = () => {
     <span className="material-symbols-outlined text-3xl" style={{fontVariationSettings:"'FILL' 1"}}>payments</span>
     <span className="text-xs font-bold">Pay Taxes</span>
     <span className="text-[10px] opacity-80">Real Property / CTC</span>
+  </Link>
+  <Link to="/services/sss" className="group p-md rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex flex-col items-center text-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
+    <span className="material-symbols-outlined text-3xl" style={{fontVariationSettings:"'FILL' 1"}}>shield_person</span>
+    <span className="text-xs font-bold">SSS Services</span>
+    <span className="text-[10px] opacity-80">Contributions & Loans</span>
   </Link>
   <Link to="/ereport" className="group p-md rounded-2xl bg-gradient-to-br from-error to-error-container text-white flex flex-col items-center text-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
     <span className="material-symbols-outlined text-3xl" style={{fontVariationSettings:"'FILL' 1"}}>campaign</span>

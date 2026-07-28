@@ -290,16 +290,101 @@ export const generateAIResponse = async (prompt: string, category: string = 'PH'
       }),
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate AI response');
+    if (response.ok) {
+      return await response.json();
     }
-
-    return await response.json();
   } catch (error) {
-    console.error('AI Assistant error:', error);
-    throw error;
+    console.warn('eGov AI integration API call fallback to Knowledge Base:', error);
   }
+
+  // Knowledge Base Fallback
+  return {
+    data: getKnowledgeBaseResponse(prompt),
+    session_id: `SESSION-${Date.now()}`,
+  };
 };
+
+/**
+ * Intelligent Philippine Government Knowledge Base Fallback
+ */
+function getKnowledgeBaseResponse(prompt: string): string {
+  const query = prompt.toLowerCase();
+
+  // 1. SSS (Social Security System)
+  if (query.includes('sss') || query.includes('social security') || query.includes('contribution') || query.includes('loan status')) {
+    return `### 🏛️ SSS (Social Security System) Guidance
+
+To check your **SSS Contribution** and **Loan Status**, follow these simple options:
+
+#### **Option 1: Via My.SSS Online Portal**
+1. Visit the official Portal: [member.sss.gov.ph](https://member.sss.gov.ph).
+2. Log in using your **CRN / User ID** and Password.
+3. Go to **Inquiries** → click **Contributions** to view posted monthly payments.
+4. For Loans: Go to **Loans** → click **Loan Status / Balance** (Salalry Loan, Calamity Loan, etc.).
+
+#### **Option 2: Via SSS Mobile App**
+1. Download the **SSS Mobile** app from Google Play Store or Apple App Store.
+2. Sign in with your My.SSS credentials.
+3. Tap **Total Contributions** or **Loans** on your dashboard for real-time status.
+
+#### **Option 3: Via uSMS / Text**
+- Text \`SSS STAT <CRN/SS_NUMBER>\` to **2600** (Network charges apply).
+
+---
+*Tip: You can also generate a Payment Reference Number (PRN) directly inside the My.SSS portal or app for contribution payments.*`;
+  }
+
+  // 2. Business Permit Renewal / Application
+  if (query.includes('business') || query.includes('permit') || query.includes('bplo') || query.includes('tin')) {
+    return `### 🏢 Business Permit & Tax Payments
+
+You can apply for or renew your **Business Permit** directly through our **eGovPH Portal**:
+
+1. Go to **Services** → **Business Permit Renewal** on the top menu.
+2. Complete **eVerify Identity Verification** via PhilSys.
+3. Review estimated LGU fees (Mayor's Permit, Sanitary, Business Tax).
+4. Pay securely using **eGovPay** (GCash, PayMaya, Landbank, Credit Card).
+5. Receive your official SMS confirmation via **eMessage**.`;
+  }
+
+  // 3. Driver's License Renewal / LTO
+  if (query.includes('driver') || query.includes('license') || query.includes('lto') || query.includes('vehicle')) {
+    return `### 🚗 Driver's License Renewal (LTO)
+
+Renew your Philippine Driver's License in **5 easy steps**:
+
+1. **CDE Exam**: Take the free Comprehensive Driver's Education (CDE) online via [LTMS Portal](https://portal.lto.gov.ph) and download your CDE Certificate.
+2. **Medical Certificate**: Get an electronic medical certificate from an LTO-accredited clinic.
+3. **eVerify Check**: Complete PhilSys Face Liveness verification on eGovPH.
+4. **Pay Fees**: Settle LTO Renewal fees seamlessly via **eGovPay**.
+5. **Claim License**: Present your reference number at your designated LTO office for biometric photo & card printing.`;
+  }
+
+  // 4. PSA Birth Certificate
+  if (query.includes('psa') || query.includes('birth') || query.includes('certificate') || query.includes('cenomar')) {
+    return `### 📄 PSA Certificates (Birth, Marriage, Death, CENOMAR)
+
+You can request official **PSA Civil Registry Documents** online for home delivery:
+
+1. **Online Request**: Visit [psaserbilis.com.ph](https://www.psaserbilis.com.ph) or [psahelpline.ph](https://psahelpline.ph).
+2. **Fill Details**: Enter complete name, birthdate, birthplace, and parents' names.
+3. **Payment**: Pay via GCash, Credit/Debit Card, Bayad Center, or 7-Eleven.
+4. **Delivery**: Delivered to your registered address in 3-5 working days within Metro Manila or 5-8 days for provinces.`;
+  }
+
+  // 5. Default Response
+  return `### 🇵🇭 eGovPH Citizen Assistance
+
+Thank you for reaching out! Here are the government services available in your eGovPH portal:
+
+- **Identity & National ID**: View PhilSys National ID details, eVerify identity verification.
+- **Business & LGU Services**: Business Permit renewal, Mayor's permit, Real Property Tax.
+- **Transport & Vehicles**: Driver's License renewal, LTO registration requirements.
+- **Social Benefits**: SSS, GSIS, PhilHealth, Pag-IBIG guidance.
+- **eReport**: File citizen complaints and incident reports directly to LGUs.
+
+*Ask me any specific question about Philippine government transactions!*`;
+}
 
 /**
  * Tourism Content Generator

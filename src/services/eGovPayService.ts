@@ -1,6 +1,7 @@
 // ============================================================
 // eGovPay Service — Government Payment Gateway
 // POST /api/v1/transaction  (proxied via /egovpay-api)
+// GET /api/v1/transaction/:uuid (Check Transaction Details)
 // Auth Header: X-eGovPay-Token: test_<TOKEN_KEY>
 // ============================================================
 
@@ -27,6 +28,17 @@ export interface PaymentIntent {
   status: 'pending' | 'paid' | 'failed' | 'cancelled'
   createdAt: string
   expiresAt: string
+}
+
+export interface TransactionDetails {
+  uuid: string
+  refno: string
+  txnid: string
+  amount: string
+  payment_status: 'INITIAL' | 'PAID' | 'SUCCESS' | 'FAILED' | 'CANCELLED' | string
+  currency: string
+  paid_at?: string
+  created_at?: string
 }
 
 /**
@@ -80,7 +92,7 @@ export const createPaymentIntent = async (
       email: payload.citizenEmail || 'citizen@egov.ph',
       name: payload.citizenName,
       callback_url: `${window.location.origin}/payment-callback`,
-      redirect_url: `${window.location.origin}/payment-success`,
+      redirect_url: `${window.location.origin}/payment-return`,
       expires_at: expiresAtStr,
       link_expires_at: expiresAtStr,
       items: payload.items && payload.items.length > 0 ? payload.items : [
@@ -134,6 +146,29 @@ export const createPaymentIntent = async (
     createdAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
   }
+}
+
+/**
+ * Check Transaction Details by UUID
+ */
+export const getTransactionDetails = async (
+  transactionUuid: string
+): Promise<TransactionDetails> => {
+  const res = await fetch(`${EGOVPAY_BASE}/api/v1/transaction/${transactionUuid}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'X-eGovPay-Token': EGOVPAY_API_KEY,
+    },
+  })
+
+  if (res.ok) {
+    const result = await res.json()
+    return result.data
+  }
+
+  const errorJson = await res.json().catch(() => ({}))
+  throw new Error(errorJson.message || `Transaction lookup failed (HTTP ${res.status})`)
 }
 
 // ── Fee tables ──────────────────────────────────────────────

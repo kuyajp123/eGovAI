@@ -16,6 +16,7 @@ export type CtaActionType =
   | 'national_id_application'
   | 'passport_application'
   | 'sss_contribution'
+  | 'sss_services'
   | 'philhealth_registration'
   | 'tax_payment'
   | 'civil_registration'
@@ -231,6 +232,20 @@ export const detectCtaAction = (
       targetRoute: '/services/lto/license-renewal',
       estimatedTime: '8-12 minutes',
       agency: 'Land Transportation Office (LTO)',
+    }
+  }
+  // SSS Services
+  else if (combinedText.includes('sss') || combinedText.includes('social security')) {
+    action = {
+      actionType: 'sss_services',
+      ctaLabel: 'Pay SSS Contribution / Verify Record',
+      ctaDescription: 'Secured via PhilSys eVerify & eGovPay',
+      icon: 'shield_person',
+      colorTheme: 'primary',
+      preFilled,
+      targetRoute: '/services/sss',
+      estimatedTime: '5 minutes',
+      agency: 'Social Security System (SSS)',
     }
   }
   // National ID

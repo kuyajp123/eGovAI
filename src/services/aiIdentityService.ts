@@ -1,6 +1,6 @@
 // ============================================================
 // aiIdentityService.ts — ID / Passport intent detection
-// Detects when a user asks to view their own National ID,
+// Detects when a user explicitly asks to view their own National ID,
 // PhilSys ID, passport, or SSO identity details, then
 // assembles a structured card from the authenticated user.
 // ============================================================
@@ -59,6 +59,9 @@ const PASSPORT_KEYWORDS = [
   'travel document',
   'travel docs',
   'dfa passport',
+  'my passport',
+  'view passport',
+  'show passport',
 ]
 
 const NATIONAL_ID_KEYWORDS = [
@@ -68,48 +71,24 @@ const NATIONAL_ID_KEYWORDS = [
   'philippine id',
   'phil id',
   'national identification',
-  'psn',                       // PhilSys Number
   'philsys number',
   'national identification system',
-  'my id',
-  'my national',
+  'my national id',
+  'my philsys',
+  'my phil id',
+  'my philsys id',
+  'show my national id',
+  'view my national id',
 ]
 
 const PROFILE_KEYWORDS = [
   'my profile',
   'my account',
   'my details',
-  'my information',
-  'my data',
-  'my sso',
-  'my egov',
-  'egov details',
-  'citizen details',
-  'show my info',
-  'show my details',
+  'my sso profile',
+  'my egov profile',
+  'show my profile',
   'view my profile',
-  'fetch my details',
-  'get my details',
-  'retrieve my details',
-]
-
-// Verbs that indicate "show me / fetch / check" intent
-const FETCH_VERBS = [
-  'show',
-  'view',
-  'get',
-  'fetch',
-  'display',
-  'check',
-  'see',
-  'what is my',
-  "what's my",
-  'give me my',
-  'access my',
-  'retrieve',
-  'pull up',
-  'look up',
-  'find my',
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -119,9 +98,6 @@ const normalize = (text: string) =>
 
 const containsAny = (text: string, keywords: string[]) =>
   keywords.some(kw => text.includes(kw))
-
-const hasFetchIntent = (text: string) =>
-  FETCH_VERBS.some(v => text.includes(v))
 
 const formatBirthdate = (raw: string): string => {
   if (!raw) return 'N/A'
@@ -152,10 +128,11 @@ const buildFullAddress = (addr: User['address']): string => {
 // ── Main export ───────────────────────────────────────────────────────────────
 
 /**
- * Analyse the user message and, if they're asking to view their own
- * identity document, build an IdentityCardData from the SSO user object.
+ * Analyse the user message and, if they're explicitly asking to view their own
+ * identity document (National ID, Passport, or Profile), build an IdentityCardData
+ * from the SSO user object.
  *
- * Returns `{ isIdentityIntent: false }` when no relevant intent is found
+ * Returns `{ isIdentityIntent: false }` when no identity document keyword is matched
  * or when the user is not authenticated.
  */
 export const processAiIdentityIntent = (
@@ -170,13 +147,13 @@ export const processAiIdentityIntent = (
   const hasNationalId = containsAny(text, NATIONAL_ID_KEYWORDS)
   const hasProfile = containsAny(text, PROFILE_KEYWORDS)
 
-  // Must have at least one document keyword OR a strong fetch-verb + "my"
-  const isDocumentQuery = hasPassport || hasNationalId || hasProfile
-  const isFetchQuery = hasFetchIntent(text) && text.includes('my')
+  // STRICT CHECK: Must explicitly match a document or profile keyword.
+  // Prevents general queries (e.g. "How can I check my SSS contribution") from triggering ID card display.
+  if (!hasPassport && !hasNationalId && !hasProfile) {
+    return { isIdentityIntent: false }
+  }
 
-  if (!isDocumentQuery && !isFetchQuery) return { isIdentityIntent: false }
-
-  // Determine document type (passport wins if both mentioned)
+  // Determine document type (passport > national_id > profile)
   let documentType: IdentityDocumentType = 'national_id'
   if (hasPassport) documentType = 'passport'
   else if (hasProfile && !hasNationalId) documentType = 'profile'
