@@ -20,8 +20,6 @@ import ProfilePage from './pages/ProfilePage'
 import NotificationsPage from './pages/NotificationsPage'
 
 function App() {
-  const isDevelopment = import.meta.env.DEV
-
   return (
     <AuthProvider>
       <BrowserRouter>
@@ -29,7 +27,7 @@ function App() {
         <Routes>
           <Route path="/" element={<WelcomePage />} />
           <Route path="/egovph/sso" element={<SSOCallbackPage />} />
-          {isDevelopment && <Route path="/test-sso" element={<TestSSOPage />} />}
+          <Route path="/test-sso" element={<TestSSOPage />} />
           <Route path="/home" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/services" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/activity" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />

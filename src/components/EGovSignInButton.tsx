@@ -1,13 +1,19 @@
-import { EGOV_CONFIG, getFullSsoCallbackUrl } from '../config/egov.config'
+import { EGOV_CONFIG } from '../config/egov.config'
+import { useNavigate } from 'react-router-dom'
 
 const EGovSignInButton = () => {
+  const navigate = useNavigate()
+
   const handleSignIn = () => {
-    // Redirect to eGovPH SSO with callback URL
-    const callbackUrl = encodeURIComponent(getFullSsoCallbackUrl())
-    const ssoUrl = `${EGOV_CONFIG.egovSsoUrl}/authorize?callback=${callbackUrl}`
-    
-    // Redirect to eGovPH SSO
-    window.location.href = ssoUrl
+    // For hackathon, redirect to test SSO page in dev mode
+    // In production, you would need to register your domain with eGovPH
+    if (import.meta.env.DEV) {
+      navigate('/test-sso')
+    } else {
+      // For production, show instructions
+      alert('Please use the Test SSO page to generate an exchange code, or contact eGovPH to register your production domain.')
+      navigate('/test-sso')
+    }
   }
 
   return (

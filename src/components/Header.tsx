@@ -6,7 +6,7 @@ const Header = () => {
   const location = useLocation()
   const { isAuthenticated } = useAuth()
 
-  const showNotifications = isAuthenticated && !['/', '/egovph/sso'].includes(location.pathname)
+  const showNotifications = isAuthenticated && !['/', '/egovph/sso', '/test-sso'].includes(location.pathname)
 
   return (
     <header className="bg-surface flex justify-between items-center px-margin-mobile h-touch-target w-full z-50 fixed top-0 border-b border-outline-variant/10">

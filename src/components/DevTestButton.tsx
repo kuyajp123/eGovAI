@@ -2,9 +2,6 @@ import { useNavigate } from 'react-router-dom'
 
 const DevTestButton = () => {
   const navigate = useNavigate()
-  const isDevelopment = import.meta.env.DEV
-
-  if (!isDevelopment) return null
 
   return (
     <button

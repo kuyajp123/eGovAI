@@ -99,14 +99,25 @@ const TestSSOPage = () => {
       <div className="mb-8">
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-tertiary-container rounded-full mb-4">
           <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-            bug_report
+            science
           </span>
-          <span className="text-sm font-bold text-on-tertiary-container">Development Testing</span>
+          <span className="text-sm font-bold text-on-tertiary-container">Testing Environment</span>
         </div>
         <h1 className="text-3xl font-bold text-on-surface mb-2">eGovPH SSO Test</h1>
-        <p className="text-on-surface-variant">
+        <p className="text-on-surface-variant mb-4">
           Generate test credentials and exchange codes for eGovPH SSO integration testing.
         </p>
+        <div className="bg-primary-container/30 border border-primary-container p-4 rounded-xl">
+          <div className="flex gap-3">
+            <span className="material-symbols-outlined text-primary">info</span>
+            <div className="flex-1 text-sm">
+              <p className="font-bold text-on-surface mb-1">Why use this page?</p>
+              <p className="text-on-surface-variant">
+                The eGovPH hackathon SSO doesn't support direct redirect authorization. Use this page to programmatically generate exchange codes via the API.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {error && (
