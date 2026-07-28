@@ -15,6 +15,7 @@ const BottomNav = () => {
   const navItems: NavItem[] = [
     { path: '/home', label: 'Home', icon: 'home' },
     { path: '/services', label: 'Services', icon: 'account_balance_wallet' },
+    { path: '/ereport', label: 'eReport', icon: 'campaign' },
     { path: '/activity', label: 'Activity', icon: 'history' },
     { path: '/profile', label: 'Profile', icon: 'person' }
   ]

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { generateAIResponse } from '../services/egovService'
+import { processAiReportIntent, IncidentReport } from '../services/eReportService'
 
 interface Message {
   id: string
@@ -8,9 +10,11 @@ interface Message {
   content: string
   timestamp: Date
   sessionId?: string
+  report?: IncidentReport
 }
 
 const AIChatHome = () => {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const [inputValue, setInputValue] = useState('')
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
@@ -122,17 +126,33 @@ const AIChatHome = () => {
     setIsLoading(true)
 
     try {
-      const contextualPrompt = buildContextualPrompt(text)
-      const response = await generateAIResponse(contextualPrompt, category)
-      
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.data,
-        timestamp: new Date(),
-        sessionId: response.session_id
+      // 1. Check if user is describing an incident/problem to report
+      const aiReportResult = await processAiReportIntent(text, user)
+
+      if (aiReportResult.isReportIntent && aiReportResult.report) {
+        // Auto-filed eReport!
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: aiReportResult.aiSummaryText || 'Incident report filed successfully.',
+          timestamp: new Date(),
+          report: aiReportResult.report
+        }
+        setMessages(prev => [...prev, assistantMessage])
+      } else {
+        // Normal AI assistant inquiry
+        const contextualPrompt = buildContextualPrompt(text)
+        const response = await generateAIResponse(contextualPrompt, category)
+        
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: response.data,
+          timestamp: new Date(),
+          sessionId: response.session_id
+        }
+        setMessages(prev => [...prev, assistantMessage])
       }
-      setMessages(prev => [...prev, assistantMessage])
     } catch (err) {
       setError('Unable to fetch response from eGovPH AI assistant. Please try again.')
       console.error('AI Chat error:', err)
@@ -206,6 +226,30 @@ const AIChatHome = () => {
                 )}
               </div>
             )}
+
+            {/* eReport Quick Action Banner */}
+            <div 
+              onClick={() => navigate('/ereport')}
+              className="w-full p-4 rounded-2xl bg-gradient-to-r from-red-600 to-rose-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center justify-between gap-4 group"
+            >
+              <div className="flex items-center gap-3 text-left">
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    campaign
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm flex items-center gap-1.5">
+                    File an Emergency or Public Report (eReport)
+                    <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-white/20 text-white">Live</span>
+                  </h3>
+                  <p className="text-xs text-white/90">Report potholes, public hazards, sanitation, or emergency incidents instantly.</p>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-xl group-hover:translate-x-1 transition-transform">
+                arrow_forward
+              </span>
+            </div>
 
             {/* Feature Bento Grid */}
             <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 text-left pt-2">
@@ -310,6 +354,45 @@ const AIChatHome = () => {
                     <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap break-words">
                       {message.content}
                     </p>
+
+                    {/* 🟢 AI AUTO-FILED EREPORT SUMMARY CARD */}
+                    {message.report && (
+                      <div className="mt-4 p-4 rounded-xl bg-surface-container/60 border border-primary/20 space-y-3">
+                        <div className="flex items-center justify-between gap-2 border-b border-primary/10 pb-2">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                            <span className="material-symbols-outlined text-base">verified</span>
+                            <span>Official eReport Filed</span>
+                          </div>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            • {message.report.status}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="p-2 rounded bg-white border border-outline-variant/30">
+                            <span className="text-[10px] text-on-surface-variant block">Tracking ID</span>
+                            <span className="font-mono font-bold text-primary">{message.report.trackingId}</span>
+                          </div>
+                          <div className="p-2 rounded bg-white border border-outline-variant/30">
+                            <span className="text-[10px] text-on-surface-variant block">Assigned Agency</span>
+                            <span className="font-semibold text-on-surface truncate block">{message.report.agencyAssigned}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-on-surface-variant space-y-1">
+                          <p><strong>Location:</strong> {message.report.location}</p>
+                          <p><strong>Severity:</strong> <span className="capitalize font-semibold text-amber-700">{message.report.severity} Priority</span></p>
+                        </div>
+
+                        <button
+                          onClick={() => navigate('/ereport')}
+                          className="w-full py-2 rounded-lg bg-primary text-white font-bold text-xs hover:bg-primary/90 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <span className="material-symbols-outlined text-sm">travel_explore</span>
+                          Track Report Resolution Progress
+                        </button>
+                      </div>
+                    )}
                     
                     <div className="flex items-center justify-between gap-4 mt-2.5 pt-1 border-t border-black/5 text-[11px] opacity-70">
                       <span>

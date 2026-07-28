@@ -17,6 +17,7 @@ import SuccessPage from './pages/SuccessPage'
 import ActivityPage from './pages/ActivityPage'
 import ProfilePage from './pages/ProfilePage'
 import NotificationsPage from './pages/NotificationsPage'
+import EReportPage from './pages/EReportPage'
 
 function App() {
   return (
@@ -29,6 +30,8 @@ function App() {
           <Route path="/home" element={<ProtectedRoute><AIChatHome /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/services" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/ereport" element={<ProtectedRoute><EReportPage /></ProtectedRoute>} />
+          <Route path="/report" element={<ProtectedRoute><EReportPage /></ProtectedRoute>} />
           <Route path="/activity" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
