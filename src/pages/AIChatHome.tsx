@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { generateAIResponse } from '../services/egovService'
 import { processAiReportIntent, IncidentReport } from '../services/eReportService'
+import { processAiBusinessIntent, AiBusinessAction } from '../services/aiBusinessService'
 
 interface Message {
   id: string
@@ -11,6 +12,7 @@ interface Message {
   timestamp: Date
   sessionId?: string
   report?: IncidentReport
+  businessAction?: AiBusinessAction
 }
 
 const AIChatHome = () => {
@@ -140,18 +142,32 @@ const AIChatHome = () => {
         }
         setMessages(prev => [...prev, assistantMessage])
       } else {
-        // Normal AI assistant inquiry
-        const contextualPrompt = buildContextualPrompt(text)
-        const response = await generateAIResponse(contextualPrompt, category)
-        
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: response.data,
-          timestamp: new Date(),
-          sessionId: response.session_id
+        // 2. Check if user is requesting Business Permit or Tax Payment
+        const aiBusinessResult = processAiBusinessIntent(text, user)
+
+        if (aiBusinessResult.isBusinessIntent && aiBusinessResult.action) {
+          const assistantMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: aiBusinessResult.aiSummaryText || 'Here is your automated business application.',
+            timestamp: new Date(),
+            businessAction: aiBusinessResult.action
+          }
+          setMessages(prev => [...prev, assistantMessage])
+        } else {
+          // Normal AI assistant inquiry
+          const contextualPrompt = buildContextualPrompt(text)
+          const response = await generateAIResponse(contextualPrompt, category)
+          
+          const assistantMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: response.data,
+            timestamp: new Date(),
+            sessionId: response.session_id
+          }
+          setMessages(prev => [...prev, assistantMessage])
         }
-        setMessages(prev => [...prev, assistantMessage])
       }
     } catch (err) {
       setError('Unable to fetch response from eGovPH AI assistant. Please try again.')
@@ -390,6 +406,56 @@ const AIChatHome = () => {
                         >
                           <span className="material-symbols-outlined text-sm">travel_explore</span>
                           Track Report Resolution Progress
+                        </button>
+                      </div>
+                    )}
+
+                    {/* 🔵 AI AUTOMATED BUSINESS & TAX TRANSACTION CARD */}
+                    {message.businessAction && (
+                      <div className="mt-4 p-4 rounded-xl bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/20 space-y-3">
+                        <div className="flex items-center justify-between gap-2 border-b border-primary/15 pb-2">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                            <span className="material-symbols-outlined text-base">account_balance</span>
+                            <span>{message.businessAction.title}</span>
+                          </div>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary-container text-primary">
+                            AI Ready • ₱{message.businessAction.estimatedTotal.toLocaleString()}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="p-2 rounded bg-white border border-outline-variant/30">
+                            <span className="text-[10px] text-on-surface-variant block">Agency</span>
+                            <span className="font-semibold text-on-surface truncate block">{message.businessAction.agency}</span>
+                          </div>
+                          <div className="p-2 rounded bg-white border border-outline-variant/30">
+                            <span className="text-[10px] text-on-surface-variant block">Applicant</span>
+                            <span className="font-semibold text-on-surface truncate block">{message.businessAction.applicantName}</span>
+                          </div>
+                        </div>
+
+                        {/* Integration Badges */}
+                        <div className="flex flex-wrap gap-1.5">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">verified</span>
+                            eVerify PhilSys
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">lock</span>
+                            eGovPay Gateway
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">sms</span>
+                            eMessage SMS
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => navigate('/services/business')}
+                          className="w-full py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary text-white font-bold text-xs hover:opacity-95 transition-all flex items-center justify-center gap-2 shadow-md active:scale-98"
+                        >
+                          <span className="material-symbols-outlined text-base">payments</span>
+                          Launch Transaction (eVerify + eGovPay) →
                         </button>
                       </div>
                     )}

@@ -23,7 +23,9 @@ const BottomNav = () => {
   return (
     <nav className="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface-container rounded-t-xl shadow-md">
       {navItems.map(item => {
-        const isActive = location.pathname === item.path
+      const isActive = item.path === '/services'
+        ? location.pathname.startsWith('/services')
+        : location.pathname === item.path
         return (
           <Link
             key={item.path}

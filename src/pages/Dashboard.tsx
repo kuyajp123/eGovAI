@@ -5,7 +5,34 @@ const Dashboard = () => {
   return (
     <>
       <main className="pt-20 pb-24 px-margin-mobile max-w-5xl mx-auto">
-{/* Welcome Hero Section */}
+
+{/* Quick Actions — Pay Taxes & Business Permit */}
+<section className="mb-xl">
+<h3 className="font-title-lg text-title-lg text-on-surface mb-md">Quick Services</h3>
+<div className="grid grid-cols-2 md:grid-cols-4 gap-md">
+  <Link to="/services" className="group p-md rounded-2xl bg-gradient-to-br from-primary to-secondary text-white flex flex-col items-center text-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
+    <span className="material-symbols-outlined text-3xl" style={{fontVariationSettings:"'FILL' 1"}}>add_business</span>
+    <span className="text-xs font-bold">Business Permit</span>
+    <span className="text-[10px] opacity-80">Apply / Renew</span>
+  </Link>
+  <Link to="/services" className="group p-md rounded-2xl bg-gradient-to-br from-secondary to-tertiary text-white flex flex-col items-center text-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
+    <span className="material-symbols-outlined text-3xl" style={{fontVariationSettings:"'FILL' 1"}}>payments</span>
+    <span className="text-xs font-bold">Pay Taxes</span>
+    <span className="text-[10px] opacity-80">Real Property / CTC</span>
+  </Link>
+  <Link to="/ereport" className="group p-md rounded-2xl bg-gradient-to-br from-error to-error-container text-white flex flex-col items-center text-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
+    <span className="material-symbols-outlined text-3xl" style={{fontVariationSettings:"'FILL' 1"}}>campaign</span>
+    <span className="text-xs font-bold">eReport</span>
+    <span className="text-[10px] opacity-80">File a Report</span>
+  </Link>
+  <Link to="/home" className="group p-md rounded-2xl bg-surface-container border border-outline-variant flex flex-col items-center text-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all">
+    <span className="material-symbols-outlined text-3xl text-primary" style={{fontVariationSettings:"'FILL' 1"}}>smart_toy</span>
+    <span className="text-xs font-bold text-on-surface">AI Assistant</span>
+    <span className="text-[10px] text-on-surface-variant">Ask GovBot</span>
+  </Link>
+</div>
+</section>
+
 <section className="mb-xl">
 <div className="relative overflow-hidden rounded-xl bg-primary-container p-lg flex flex-col md:flex-row items-center gap-lg">
 <div className="z-10 flex-1">

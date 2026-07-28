@@ -17,6 +17,24 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/integration-api/, ''),
         secure: true,
       },
+      '/everify-api': {
+        target: 'https://hackathon-sso.e.gov.ph',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/everify-api/, ''),
+        secure: false,
+      },
+      '/emessage-api': {
+        target: 'https://hackathon-sso.e.gov.ph',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/emessage-api/, ''),
+        secure: false,
+      },
+      '/egovpay-api': {
+        target: 'https://hackathon-sso.e.gov.ph',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/egovpay-api/, ''),
+        secure: false,
+      },
     },
   },
 })
