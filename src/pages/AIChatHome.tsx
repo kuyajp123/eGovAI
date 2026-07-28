@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { generateAIResponse } from '../services/egovService'
 
 interface Message {
@@ -12,6 +13,7 @@ interface Message {
 
 const AIChatHome = () => {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [inputValue, setInputValue] = useState('')
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
   const [messages, setMessages] = useState<Message[]>([])
@@ -56,6 +58,26 @@ const AIChatHome = () => {
     await handleSend(query)
   }
 
+  const buildContextualPrompt = (userQuery: string): string => {
+    if (!user || !user.firstName) {
+      return userQuery
+    }
+
+    // Build user context
+    const userContext = [
+      `User Information:`,
+      `- Name: ${[user.firstName, user.middleName, user.lastName, user.suffix].filter(Boolean).join(' ')}`,
+      user.email && `- Email: ${user.email}`,
+      user.mobileNumber && `- Mobile: ${user.mobileNumber}`,
+      user.birthdate && `- Birthdate: ${user.birthdate}`,
+      user.address?.city && `- Location: ${[user.address.city, user.address.province].filter(Boolean).join(', ')}`,
+      ``,
+      `User Query: ${userQuery}`
+    ].filter(Boolean).join('\n')
+
+    return userContext
+  }
+
   const handleSend = async (messageText?: string) => {
     const text = messageText || inputValue.trim()
     if (!text) return
@@ -63,7 +85,7 @@ const AIChatHome = () => {
     setError(null)
     setInputValue('')
 
-    // Add user message
+    // Add user message (display only the actual query)
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -74,8 +96,22 @@ const AIChatHome = () => {
     setIsLoading(true)
 
     try {
-      // Call AI Assistant API
-      const response = await generateAIResponse(text, category)
+      // Build contextual prompt with user information
+      const contextualPrompt = buildContextualPrompt(text)
+      
+      if (import.meta.env.DEV) {
+        console.log('=== AI Request with User Context ===')
+        console.log('Original Query:', text)
+        console.log('Contextual Prompt:', contextualPrompt)
+        console.log('User Data:', user)
+      }
+      
+      // Call AI Assistant API with user context
+      const response = await generateAIResponse(contextualPrompt, category)
+      
+      if (import.meta.env.DEV) {
+        console.log('AI Response:', response)
+      }
       
       // Add assistant response
       const assistantMessage: Message = {
@@ -129,8 +165,25 @@ const AIChatHome = () => {
 
             {/* Greeting */}
             <h2 className="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-on-surface tracking-tight">
-              What government service do you need today?
+              {user?.firstName 
+                ? `Hi ${user.firstName}, what government service do you need today?`
+                : 'What government service do you need today?'}
             </h2>
+
+            {/* User Badge (if logged in) */}
+            {user && user.firstName && (
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary-container text-on-primary-container">
+                <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  account_circle
+                </span>
+                <span className="font-label-md text-label-md">
+                  Logged in as {user.firstName} {user.lastName}
+                </span>
+                <span className="material-symbols-outlined text-sm text-tertiary" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  verified
+                </span>
+              </div>
+            )}
 
             {/* Suggestions Chips (Horizontal Scroll) */}
             <div className="w-full overflow-x-auto hide-scrollbar flex gap-3 pb-4">
@@ -162,7 +215,9 @@ const AIChatHome = () => {
                 </div>
                 <div>
                   <h3 className="font-title-md text-title-md text-on-surface">eGovPH Assistant</h3>
-                  <p className="font-body-sm text-body-sm text-on-surface-variant">AI-powered support</p>
+                  <p className="font-body-sm text-body-sm text-on-surface-variant">
+                    {user?.firstName ? `Personalized for ${user.firstName}` : 'AI-powered support'}
+                  </p>
                 </div>
               </div>
               <button
