@@ -23,6 +23,10 @@ export interface EGovExchangeCode {
  */
 export async function generateAccessToken(): Promise<EGovAccessToken> {
   try {
+    console.log('🔑 Generating access token...')
+    console.log('Partner Code:', PARTNER_CODE)
+    console.log('API URL:', `${EGOV_BASE_URL}/api/token`)
+    
     const response = await fetch(`${EGOV_BASE_URL}/api/token`, {
       method: 'POST',
       headers: {
@@ -36,11 +40,13 @@ export async function generateAccessToken(): Promise<EGovAccessToken> {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || 'Failed to generate access token')
+      const error = await response.json().catch(() => ({}))
+      console.error('❌ Token generation failed:', error)
+      throw new Error(error.message || `HTTP ${response.status}: ${error.error || 'Failed to generate access token'}`)
     }
 
     const data = await response.json()
+    console.log('✅ Token generated successfully')
     return data
   } catch (error) {
     console.error('Access token generation failed:', error)
@@ -56,6 +62,9 @@ export async function generateExchangeCode(
   testAccountId?: string
 ): Promise<EGovExchangeCode> {
   try {
+    console.log('🎫 Generating exchange code...')
+    console.log('Test Account:', testAccountId || 'default_test_account')
+    
     const response = await fetch(`${EGOV_BASE_URL}/api/mint`, {
       method: 'POST',
       headers: {
@@ -70,10 +79,12 @@ export async function generateExchangeCode(
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
-      throw new Error(error.message || `Failed to generate exchange code: ${response.status}`)
+      console.error('❌ Exchange code generation failed:', error)
+      throw new Error(error.message || `HTTP ${response.status}: ${error.error || 'Failed to generate exchange code'}`)
     }
 
     const data = await response.json()
+    console.log('✅ Exchange code generated successfully')
     return {
       exchange_code: data.exchange_code || data.code,
       expires_at: data.expires_at || data.expiry,
