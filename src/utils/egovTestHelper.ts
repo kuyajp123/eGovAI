@@ -31,6 +31,7 @@ export async function generateAccessToken(): Promise<EGovAccessToken> {
       body: JSON.stringify({
         partner_code: PARTNER_CODE,
         partner_secret: PARTNER_SECRET,
+        scope: 'mint',
       }),
     })
 
