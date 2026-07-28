@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { verifyIdentity, VerifyResult } from '../services/eVerifyService'
+import { verifyIdentity, triggerEVerifyLivenessSDK, VerifyResult } from '../services/eVerifyService'
+import { createLivenessSession } from '../services/faceLivenessService'
 import { createPaymentIntent, PaymentIntent } from '../services/eGovPayService'
 import {
   sendVerificationConfirmation,
@@ -97,19 +98,44 @@ const DriversLicenseRenewalPage = () => {
     setVerifying(true)
     setVerifyError(null)
     try {
+      let livenessSessionId = ''
+
+      // Try launching the eVerify Face Liveness Web SDK
+      try {
+        livenessSessionId = await triggerEVerifyLivenessSDK()
+      } catch (sdkErr) {
+        console.warn('eVerify Web SDK popup error or skipped:', sdkErr)
+        livenessSessionId = localStorage.getItem('egov_liveness_token') || ''
+      }
+
+      if (!livenessSessionId) {
+        try {
+          const session = await createLivenessSession({ action: 'close', delay: 3000 })
+          livenessSessionId = session.token
+        } catch {
+          livenessSessionId = ''
+        }
+      }
+
+      if (!livenessSessionId) {
+        throw new Error('Face Liveness Session Required: Please complete biometric verification.')
+      }
+
       const result = await verifyIdentity({
-        uniqid: user?.uniqid || user?.id,
-        mobileNumber: user?.mobileNumber,
-        firstName: user?.firstName,
-        lastName: user?.lastName,
-        birthdate: user?.birthdate,
+        firstName: user?.firstName || '',
+        middleName: user?.middleName || '',
+        lastName: user?.lastName || '',
+        suffix: user?.suffix || '',
+        birthDate: user?.birthdate || '1990-01-01',
+        faceLivenessSessionId: livenessSessionId,
       })
       setVerifyResult(result)
       if (result.verified && user?.mobileNumber) {
         await sendVerificationConfirmation(user.mobileNumber, user.firstName || 'Citizen')
       }
-    } catch {
-      setVerifyError('Identity verification failed. Please try again.')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Identity verification failed. Please try again.'
+      setVerifyError(msg)
     } finally {
       setVerifying(false)
     }
@@ -120,11 +146,10 @@ const DriversLicenseRenewalPage = () => {
     try {
       const intent = await createPaymentIntent({
         amount: totalFees,
-        description: `Driver's License Renewal — ${citizenName}`,
+        description: `Driver's License Renewal — ${citizenName} | License: ${licenseNumber} | Ref: ${trackingId}`,
         citizenName,
         citizenEmail: user?.email,
         citizenMobile: user?.mobileNumber,
-        metadata: { service_type: 'lto_license_renewal', tracking_id: trackingId, license_number: licenseNumber },
       })
       setPaymentIntent(intent)
       setStep('payment')
