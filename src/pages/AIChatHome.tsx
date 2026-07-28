@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import { generateAIResponse } from '../services/egovService'
 import { processAiReportIntent, IncidentReport } from '../services/eReportService'
 import { processAiBusinessIntent, AiBusinessAction } from '../services/aiBusinessService'
+import { processAiIdentityIntent, IdentityCardData } from '../services/aiIdentityService'
+import { detectCtaAction, CtaAction } from '../services/aiCtaService'
 
 interface Message {
   id: string
@@ -14,6 +16,8 @@ interface Message {
   sessionId?: string
   report?: IncidentReport
   businessAction?: AiBusinessAction
+  identityCard?: IdentityCardData
+  ctaAction?: CtaAction
 }
 
 const AIChatHome = () => {
@@ -25,6 +29,7 @@ const AIChatHome = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [category] = useState('PH')
@@ -129,7 +134,23 @@ const AIChatHome = () => {
     setIsLoading(true)
 
     try {
-      // 1. Check if user is describing an incident/problem to report
+      // 1. Check if user is asking for their own ID / passport / profile details
+      const aiIdentityResult = processAiIdentityIntent(text, user)
+
+      if (aiIdentityResult.isIdentityIntent && aiIdentityResult.card) {
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: aiIdentityResult.aiSummaryText || 'Here are your identity details from your eGovPH SSO account.',
+          timestamp: new Date(),
+          identityCard: aiIdentityResult.card,
+        }
+        setMessages(prev => [...prev, assistantMessage])
+        setIsLoading(false)
+        return
+      }
+
+      // 2. Check if user is describing an incident/problem to report
       const aiReportResult = await processAiReportIntent(text, user)
 
       if (aiReportResult.isReportIntent && aiReportResult.report) {
@@ -143,7 +164,7 @@ const AIChatHome = () => {
         }
         setMessages(prev => [...prev, assistantMessage])
       } else {
-        // 2. Check if user is requesting Business Permit or Tax Payment
+        // 3. Check if user is requesting Business Permit or Tax Payment
         const aiBusinessResult = processAiBusinessIntent(text, user)
 
         if (aiBusinessResult.isBusinessIntent && aiBusinessResult.action) {
@@ -159,13 +180,17 @@ const AIChatHome = () => {
           // Normal AI assistant inquiry
           const contextualPrompt = buildContextualPrompt(text)
           const response = await generateAIResponse(contextualPrompt, category)
-          
+
+          // Detect if the AI response implies a submittable action
+          const ctaResult = detectCtaAction(text, response.data, user)
+
           const assistantMessage: Message = {
             id: (Date.now() + 1).toString(),
             role: 'assistant',
             content: response.data,
             timestamp: new Date(),
-            sessionId: response.session_id
+            sessionId: response.session_id,
+            ctaAction: ctaResult.hasCta ? ctaResult.action : undefined,
           }
           setMessages(prev => [...prev, assistantMessage])
         }
@@ -191,6 +216,13 @@ const AIChatHome = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-surface via-surface-container-low to-surface flex flex-col justify-between">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl bg-primary text-white shadow-2xl text-xs font-bold flex items-center gap-2 animate-bounce pointer-events-none">
+          <span className="material-symbols-outlined text-base">check_circle</span>
+          {toastMessage}
+        </div>
+      )}
       {/* Top Header Spacing */}
       <main className="flex-grow pt-20 pb-40 px-4 md:px-8 max-w-4xl mx-auto w-full flex flex-col">
         {messages.length === 0 ? (
@@ -477,7 +509,275 @@ const AIChatHome = () => {
                         </button>
                       </div>
                     )}
+
+                    {/* 🆔 IDENTITY CARD — PASSPORT / NATIONAL ID / PROFILE */}
+                    {message.identityCard && (
+                      <div className="mt-4 rounded-2xl overflow-hidden shadow-lg border-2 border-primary/30 bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+                        {/* Card Header */}
+                        <div className="bg-gradient-to-r from-primary via-secondary to-tertiary px-4 py-3 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-white text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                              {message.identityCard.documentType === 'passport' ? 'flight_takeoff' :
+                               message.identityCard.documentType === 'national_id' ? 'badge' : 'account_circle'}
+                            </span>
+                            <div className="text-white">
+                              <p className="text-xs font-bold leading-none">
+                                {message.identityCard.documentType === 'passport' ? 'Philippine Passport (DFA)' :
+                                 message.identityCard.documentType === 'national_id' ? 'PhilSys National ID' : 'eGovPH Citizen Profile'}
+                              </p>
+                              <p className="text-[10px] opacity-90 mt-0.5">Republic of the Philippines</p>
+                            </div>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-full bg-white/20 text-white text-[9px] font-bold uppercase tracking-wide backdrop-blur-sm">
+                            SSO Verified
+                          </span>
+                        </div>
+
+                        {/* Card Body */}
+                        <div className="p-4 space-y-4">
+                          {/* Profile Photo + Name Block */}
+                          <div className="flex items-start gap-4">
+                            {/* Photo */}
+                            <div className="shrink-0">
+                              <div className="w-20 h-24 rounded-lg overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-secondary/5 flex items-center justify-center shadow-sm">
+                                {message.identityCard.profilePhotoUrl ? (
+                                  <img
+                                    src={message.identityCard.profilePhotoUrl}
+                                    alt="Citizen photo"
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="text-3xl font-bold text-primary/40">
+                                    {message.identityCard.firstName?.[0]}{message.identityCard.lastName?.[0]}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Name & Core Info */}
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <div>
+                                <p className="text-[9px] uppercase tracking-wider font-bold text-primary/70 mb-0.5">Full Legal Name</p>
+                                <p className="text-base font-bold text-on-surface leading-tight">{message.identityCard.fullName}</p>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                <div>
+                                  <p className="text-[9px] uppercase tracking-wider font-semibold text-on-surface-variant mb-0.5">Date of Birth</p>
+                                  <p className="font-semibold text-on-surface">{message.identityCard.birthdateFmt}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[9px] uppercase tracking-wider font-semibold text-on-surface-variant mb-0.5">PhilSys ID</p>
+                                  <p className="font-mono font-bold text-primary text-[10px]">{message.identityCard.uniqid || 'N/A'}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Contact & Address Section */}
+                          <div className="border-t border-primary/10 pt-3 space-y-2.5 text-xs">
+                            <div className="flex items-start gap-2">
+                              <span className="material-symbols-outlined text-primary/70 text-sm mt-0.5 shrink-0">mail</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[9px] uppercase tracking-wider font-semibold text-on-surface-variant">Email Address</p>
+                                <p className="font-medium text-on-surface truncate">{message.identityCard.email || 'N/A'}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-start gap-2">
+                              <span className="material-symbols-outlined text-primary/70 text-sm mt-0.5 shrink-0">phone</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[9px] uppercase tracking-wider font-semibold text-on-surface-variant">Mobile Number</p>
+                                <p className="font-mono font-medium text-on-surface">{message.identityCard.mobileNumber || 'N/A'}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-start gap-2">
+                              <span className="material-symbols-outlined text-primary/70 text-sm mt-0.5 shrink-0">home_pin</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[9px] uppercase tracking-wider font-semibold text-on-surface-variant">Registered Address</p>
+                                <p className="font-medium text-on-surface leading-snug">{message.identityCard.address.full || 'N/A'}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Footer Badges */}
+                          <div className="border-t border-primary/10 pt-3 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap gap-1.5">
+                              <span className="px-2 py-1 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[11px]">verified</span>
+                                SSO Verified
+                              </span>
+                              <span className="px-2 py-1 rounded-full text-[9px] font-bold bg-blue-100 text-blue-800 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[11px]">shield_person</span>
+                                eGovPH Registry
+                              </span>
+                              {message.identityCard.profilePhotoUrl && (
+                                <span className="px-2 py-1 rounded-full text-[9px] font-bold bg-purple-100 text-purple-800 flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[11px]">face_retouching_natural</span>
+                                  Face Liveness
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[9px] text-on-surface-variant font-mono">
+                              Retrieved {new Date(message.identityCard.retrievedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="grid grid-cols-2 gap-2 pt-2">
+                            <button
+                              onClick={() => navigate('/profile')}
+                              className="py-2 rounded-lg bg-white border-2 border-primary/30 text-primary font-bold text-xs hover:bg-primary/5 transition-all flex items-center justify-center gap-1.5"
+                            >
+                              <span className="material-symbols-outlined text-sm">person</span>
+                              View Full Profile
+                            </button>
+                            <button
+                              onClick={() => {
+                                const text = `${message.identityCard!.fullName}\nPhilSys ID: ${message.identityCard!.uniqid}\nBirthdate: ${message.identityCard!.birthdateFmt}\nEmail: ${message.identityCard!.email}\nMobile: ${message.identityCard!.mobileNumber}\nAddress: ${message.identityCard!.address.full}`
+                                navigator.clipboard.writeText(text)
+                                setToastMessage('Identity details copied to clipboard!')
+                                setTimeout(() => setToastMessage(null), 2500)
+                              }}
+                              className="py-2 rounded-lg bg-gradient-to-r from-primary to-secondary text-white font-bold text-xs hover:opacity-95 transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                            >
+                              <span className="material-symbols-outlined text-sm">content_copy</span>
+                              Copy Details
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     
+                    {/* ⚡ SMART CTA — Pre-filled action panel */}
+                    {message.ctaAction && (
+                      <div className="mt-4 rounded-2xl overflow-hidden border border-primary/20 shadow-md">
+                        {/* Panel Header */}
+                        <div className={`px-4 py-2.5 flex items-center gap-2 ${
+                          message.ctaAction.colorTheme === 'secondary'
+                            ? 'bg-gradient-to-r from-secondary to-tertiary'
+                            : message.ctaAction.colorTheme === 'tertiary'
+                            ? 'bg-gradient-to-r from-tertiary to-secondary'
+                            : 'bg-gradient-to-r from-primary to-secondary'
+                        }`}>
+                          <span className="material-symbols-outlined text-white text-base" style={{ fontVariationSettings: "'FILL' 1" }}>
+                            {message.ctaAction.icon}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white text-xs font-bold leading-none">{message.ctaAction.agency}</p>
+                            <p className="text-white/80 text-[10px] mt-0.5">Ready to submit with your details</p>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-[9px] font-bold uppercase tracking-wide shrink-0">
+                            Auto-Filled
+                          </span>
+                        </div>
+
+                        {/* Pre-filled Details Preview */}
+                        <div className="bg-white px-4 py-3 space-y-2">
+                          <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Your details, ready to go</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="flex items-center gap-1.5 bg-surface-container/60 rounded-lg px-2.5 py-1.5">
+                              <span className="material-symbols-outlined text-primary/60 text-sm shrink-0">person</span>
+                              <div className="min-w-0">
+                                <p className="text-[9px] text-on-surface-variant">Name</p>
+                                <p className="text-xs font-semibold text-on-surface truncate">{message.ctaAction.preFilled.name}</p>
+                              </div>
+                            </div>
+                            {message.ctaAction.preFilled.location && (
+                              <div className="flex items-center gap-1.5 bg-surface-container/60 rounded-lg px-2.5 py-1.5">
+                                <span className="material-symbols-outlined text-primary/60 text-sm shrink-0">home_pin</span>
+                                <div className="min-w-0">
+                                  <p className="text-[9px] text-on-surface-variant">Location</p>
+                                  <p className="text-xs font-semibold text-on-surface truncate">{message.ctaAction.preFilled.location}</p>
+                                </div>
+                              </div>
+                            )}
+                            {message.ctaAction.preFilled.email && (
+                              <div className="flex items-center gap-1.5 bg-surface-container/60 rounded-lg px-2.5 py-1.5">
+                                <span className="material-symbols-outlined text-primary/60 text-sm shrink-0">mail</span>
+                                <div className="min-w-0">
+                                  <p className="text-[9px] text-on-surface-variant">Email</p>
+                                  <p className="text-xs font-semibold text-on-surface truncate">{message.ctaAction.preFilled.email}</p>
+                                </div>
+                              </div>
+                            )}
+                            {message.ctaAction.preFilled.mobile && (
+                              <div className="flex items-center gap-1.5 bg-surface-container/60 rounded-lg px-2.5 py-1.5">
+                                <span className="material-symbols-outlined text-primary/60 text-sm shrink-0">phone</span>
+                                <div className="min-w-0">
+                                  <p className="text-[9px] text-on-surface-variant">Mobile</p>
+                                  <p className="text-xs font-semibold text-on-surface font-mono">{message.ctaAction.preFilled.mobile}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Trust row */}
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[11px]">verified</span>
+                              SSO Verified Identity
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-100 text-blue-800 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[11px]">lock</span>
+                              eGovPH Secured
+                            </span>
+                            {message.ctaAction.estimatedTime && (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[11px]">schedule</span>
+                                ~{message.ctaAction.estimatedTime}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* CTA Button */}
+                          <button
+                            onClick={() => {
+                              if (message.ctaAction?.targetRoute) {
+                                navigate(message.ctaAction.targetRoute)
+                              } else {
+                                // Pre-fill the input to trigger the business flow
+                                handleSuggestionClick(
+                                  message.ctaAction?.actionType === 'drivers_license_renewal'
+                                    ? 'I want to renew my driver\'s license'
+                                    : message.ctaAction?.actionType === 'national_id_application'
+                                    ? 'I want to apply for a National ID'
+                                    : message.ctaAction?.actionType === 'passport_application'
+                                    ? 'I want to apply for a passport'
+                                    : message.ctaAction?.actionType === 'sss_contribution'
+                                    ? 'I want to pay my SSS contribution'
+                                    : message.ctaAction?.actionType === 'philhealth_registration'
+                                    ? 'I want to register for PhilHealth'
+                                    : message.ctaAction?.actionType === 'civil_registration'
+                                    ? 'I want to request a PSA document'
+                                    : message.ctaAction?.actionType === 'vehicle_registration'
+                                    ? 'I want to register my vehicle'
+                                    : `Process ${message.ctaAction?.agency} application`
+                                )
+                              }
+                            }}
+                            className={`mt-1 w-full py-2.5 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 shadow-md hover:opacity-95 active:scale-[0.98] transition-all ${
+                              message.ctaAction.colorTheme === 'secondary'
+                                ? 'bg-gradient-to-r from-secondary to-tertiary'
+                                : message.ctaAction.colorTheme === 'tertiary'
+                                ? 'bg-gradient-to-r from-tertiary to-secondary'
+                                : 'bg-gradient-to-r from-primary to-secondary'
+                            }`}
+                          >
+                            <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
+                              {message.ctaAction.icon}
+                            </span>
+                            {message.ctaAction.ctaLabel}
+                            <span className="material-symbols-outlined text-base ml-auto">arrow_forward</span>
+                          </button>
+                          <p className="text-[10px] text-center text-on-surface-variant pb-1">
+                            {message.ctaAction.ctaDescription}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between gap-4 mt-2.5 pt-1 border-t border-black/5 text-[11px] opacity-70">
                       <span>
                         {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

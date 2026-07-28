@@ -19,6 +19,7 @@ import ProfilePage from './pages/ProfilePage'
 import NotificationsPage from './pages/NotificationsPage'
 import EReportPage from './pages/EReportPage'
 import BusinessServicesPage from './pages/BusinessServicesPage'
+import DriversLicenseRenewalPage from './pages/DriversLicenseRenewalPage'
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/services" element={<ProtectedRoute><BusinessServicesPage /></ProtectedRoute>} />
           <Route path="/services/business" element={<ProtectedRoute><BusinessServicesPage /></ProtectedRoute>} />
+          <Route path="/services/lto/license-renewal" element={<ProtectedRoute><DriversLicenseRenewalPage /></ProtectedRoute>} />
           <Route path="/ereport" element={<ProtectedRoute><EReportPage /></ProtectedRoute>} />
           <Route path="/report" element={<ProtectedRoute><EReportPage /></ProtectedRoute>} />
           <Route path="/activity" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
