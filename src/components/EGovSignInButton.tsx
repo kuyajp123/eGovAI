@@ -1,18 +1,7 @@
-import { useNavigate } from 'react-router-dom'
-
 const EGovSignInButton = () => {
-  const navigate = useNavigate()
-
   const handleSignIn = () => {
-    // For hackathon, redirect to test SSO page in dev mode
-    // In production, you would need to register your domain with eGovPH
-    if (import.meta.env.DEV) {
-      navigate('/test-sso')
-    } else {
-      // For production, show instructions
-      alert('Please use the Test SSO page to generate an exchange code, or contact eGovPH to register your production domain.')
-      navigate('/test-sso')
-    }
+    // Show instructions for production use
+    alert('To test SSO: Use the eGovPH portal to generate an exchange code, then access the callback URL:\n\nhttps://e-gov-ai.vercel.app/egovph/sso?exchange_code=YOUR_CODE')
   }
 
   return (

@@ -3,4 +3,14 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    proxy: {
+      '/egov-api': {
+        target: 'https://hackathon-sso.e.gov.ph',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/egov-api/, ''),
+        secure: true,
+      },
+    },
+  },
 })

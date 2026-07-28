@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/egov-api/:path*",
+      "destination": "https://hackathon-sso.e.gov.ph/:path*"
+    },
+    {
+      "source": "/((?!egov-api).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

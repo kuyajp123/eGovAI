@@ -2,11 +2,9 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import Header from './components/Header'
 import BottomNav from './components/BottomNav'
-import DevTestButton from './components/DevTestButton'
 import ProtectedRoute from './components/ProtectedRoute'
 import WelcomePage from './pages/WelcomePage'
 import SSOCallbackPage from './pages/SSOCallbackPage'
-import TestSSOPage from './pages/TestSSOPage'
 import Dashboard from './pages/Dashboard'
 import IDRegistration from './pages/IDRegistration'
 import DocumentUpload from './pages/DocumentUpload'
@@ -27,7 +25,6 @@ function App() {
         <Routes>
           <Route path="/" element={<WelcomePage />} />
           <Route path="/egovph/sso" element={<SSOCallbackPage />} />
-          <Route path="/test-sso" element={<TestSSOPage />} />
           <Route path="/home" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/services" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/activity" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
@@ -42,7 +39,6 @@ function App() {
           <Route path="/success" element={<ProtectedRoute><SuccessPage /></ProtectedRoute>} />
         </Routes>
         <BottomNav />
-        <DevTestButton />
       </BrowserRouter>
     </AuthProvider>
   )

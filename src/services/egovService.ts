@@ -14,24 +14,26 @@ export const exchangeCodeForUserData = async (
   exchangeCode: string
 ): Promise<ExchangeCodeResponse> => {
   try {
-    // For hackathon, exchange code directly with eGovPH API
-    const response = await fetch(`${EGOV_CONFIG.egovSsoUrl}/api/user-info`, {
+    // Exchange code for access token via eGovPH API
+    const tokenResponse = await fetch(`/egov-api/api/token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         exchange_code: exchangeCode,
-        partner_code: import.meta.env.VITE_EGOV_PARTNER_CODE
+        scope: 'SSO_AUTHENTICATION',
+        partner_code: import.meta.env.VITE_EGOV_PARTNER_CODE,
+        partner_secret: import.meta.env.VITE_EGOV_PARTNER_SECRET,
       }),
     })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.message || 'Failed to exchange code')
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.json().catch(() => ({}))
+      throw new Error(errorData.message || 'Failed to exchange code for token')
     }
 
-    const data = await response.json()
+    const data = await tokenResponse.json()
     
     // Map eGovPH response to our EGovUser format
     const egovUser: EGovUser = {
