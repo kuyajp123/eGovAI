@@ -7,6 +7,56 @@ interface ExchangeCodeResponse {
   error?: string
 }
 
+// AI Assistant API Types
+interface TokenResponse {
+  access_token: string
+  expires_in_seconds: number
+  credits_total: number
+  credits_remaining: number
+}
+
+interface AIAssistantResponse {
+  data: string
+  session_id: string
+}
+
+interface TranslatorResponse {
+  original_prompt: string
+  source_lang: string
+  target_lang: string
+  translate_from: {
+    code: string
+    label: string
+  }
+  translated_prompt: string
+  transliterated_prompt: string
+}
+
+interface TourismResponse {
+  data: string
+  session_id: string
+}
+
+interface LawsResponse {
+  data: string
+  session_id: string
+}
+
+interface DocumentExtractorResponse {
+  data: string
+}
+
+interface CreditsResponse {
+  credits_total: number
+  credits_used: number
+  credits_remaining: number
+  expires_at: string
+}
+
+// Store token in memory (or use localStorage for persistence)
+let cachedToken: string | null = null
+let tokenExpiry: number | null = null
+
 /**
  * Exchange the authorization code for user data from eGovPH
  */
@@ -176,5 +226,265 @@ export const updateLastLogin = async (userId: string): Promise<void> => {
     })
   } catch (error) {
     console.error('Update last login error:', error)
+  }
+}
+
+// ============================================================================
+// AI INTEGRATION API FUNCTIONS
+// ============================================================================
+
+// Use proxy for integration API to avoid CORS and DNS issues
+const INTEGRATION_BASE_URL = '/integration-api'
+const ACCESS_CODE = import.meta.env.VITE_EGOV_ACCESS_CODE
+
+// Debug: Log configuration
+console.log('Integration API Config:', {
+  baseUrl: INTEGRATION_BASE_URL,
+  hasAccessCode: !!ACCESS_CODE,
+  accessCodePrefix: ACCESS_CODE?.substring(0, 10) + '...'
+})
+
+/**
+ * Get or generate access token for AI Integration API
+ */
+const getAccessToken = async (): Promise<string> => {
+  // Return cached token if still valid
+  if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
+    return cachedToken
+  }
+
+  try {
+    const response = await fetch(`${INTEGRATION_BASE_URL}/api/v1/egov/integration/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        access_code: ACCESS_CODE,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Token API error response:', errorText)
+      throw new Error(`Failed to generate access token: ${response.status} - ${errorText}`)
+    }
+
+    const data: TokenResponse = await response.json()
+    
+    // Cache token with expiry (subtract 60 seconds for safety margin)
+    cachedToken = data.access_token
+    tokenExpiry = Date.now() + (data.expires_in_seconds - 60) * 1000
+    
+    return data.access_token
+  } catch (error) {
+    console.error('Get access token error:', error)
+    throw error
+  }
+}
+
+/**
+ * AI Assistant - Generate response to user query
+ */
+export const generateAIResponse = async (
+  prompt: string,
+  category: string = 'PH'
+): Promise<AIAssistantResponse> => {
+  try {
+    const token = await getAccessToken()
+    
+    const response = await fetch(
+      `${INTEGRATION_BASE_URL}/api/v1/egov/integration/ai_assistant/generate`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          prompt,
+          category,
+        }),
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to generate AI response')
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('AI Assistant error:', error)
+    throw error
+  }
+}
+
+/**
+ * Tourism Content Generator
+ */
+export const generateTourismContent = async (
+  prompt: string,
+  category: string = 'PH'
+): Promise<TourismResponse> => {
+  try {
+    const token = await getAccessToken()
+    
+    const response = await fetch(
+      `${INTEGRATION_BASE_URL}/api/v1/egov/integration/tourism/generate`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          prompt,
+          category,
+        }),
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to generate tourism content')
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Tourism generator error:', error)
+    throw error
+  }
+}
+
+/**
+ * Laws and Regulations Generator
+ */
+export const generateLawsResponse = async (
+  prompt: string,
+  category: string = 'PH'
+): Promise<LawsResponse> => {
+  try {
+    const token = await getAccessToken()
+    
+    const response = await fetch(
+      `${INTEGRATION_BASE_URL}/api/v1/egov/integration/laws_and_regulations/generate`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          prompt,
+          category,
+        }),
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to generate laws response')
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Laws generator error:', error)
+    throw error
+  }
+}
+
+/**
+ * Translator
+ */
+export const translateText = async (
+  prompt: string,
+  sourceLang: string,
+  targetLang: string
+): Promise<TranslatorResponse> => {
+  try {
+    const token = await getAccessToken()
+    
+    const response = await fetch(
+      `${INTEGRATION_BASE_URL}/api/v1/egov/integration/translator/generate`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          prompt,
+          source_lang: sourceLang,
+          target_lang: targetLang,
+        }),
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to translate text')
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Translator error:', error)
+    throw error
+  }
+}
+
+/**
+ * Document Extractor
+ */
+export const extractDocumentData = async (file: File): Promise<DocumentExtractorResponse> => {
+  try {
+    const token = await getAccessToken()
+    
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const response = await fetch(
+      `${INTEGRATION_BASE_URL}/api/v1/egov/integration/document_extractor/generate`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to extract document data')
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Document extractor error:', error)
+    throw error
+  }
+}
+
+/**
+ * Get API Credits Balance
+ */
+export const getCreditsBalance = async (): Promise<CreditsResponse> => {
+  try {
+    const token = await getAccessToken()
+    
+    const response = await fetch(
+      `${INTEGRATION_BASE_URL}/api/v1/egov/integration/credits`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to get credits balance')
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Get credits error:', error)
+    throw error
   }
 }

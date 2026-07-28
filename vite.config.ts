@@ -11,6 +11,12 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/egov-api/, ''),
         secure: true,
       },
+      '/integration-api': {
+        target: 'https://egov-ai-core-ws.oueg.info',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/integration-api/, ''),
+        secure: true,
+      },
     },
   },
 })
