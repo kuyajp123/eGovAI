@@ -1,71 +1,128 @@
 import { useNavigate, Link } from 'react-router-dom'
 
 const Dashboard = () => {
-  const navigate = useNavigate()
-
+  const navigate = useNavigate();
   return (
-    <div className="pt-24 px-margin-mobile max-w-2xl mx-auto space-y-6">
-      <div className="flex flex-col gap-1">
-        <span className="font-bold text-primary uppercase tracking-widest text-[12px]">Recommended for You</span>
-        <h2 className="text-[32px] font-bold text-on-surface">
-          Streamline your <span className="text-primary">Compliance</span>
-        </h2>
-      </div>
-
-      <div className="bg-surface-container-lowest rounded-xl shadow-md border border-outline-variant overflow-hidden p-6 flex flex-col gap-6 bento-card">
-        <div className="flex flex-col gap-2">
-          <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-            <span className="material-symbols-outlined text-[28px]">business_center</span>
-          </div>
-          <h3 className="text-2xl font-bold text-on-surface">Business Permit Renewal</h3>
-          <p className="text-on-surface-variant">
-            Automated processing for the current fiscal year. Secure and encrypted.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <div className="bg-surface-container-low p-3 rounded-lg border border-outline-variant/30">
-            <p className="text-[10px] uppercase font-bold text-on-surface-variant">EST TIME</p>
-            <p className="font-bold">15m</p>
-          </div>
-          <div className="bg-surface-container-low p-3 rounded-lg border border-outline-variant/30">
-            <p className="text-[10px] uppercase font-bold text-on-surface-variant">GOV FEE</p>
-            <p className="font-bold">₱1,500</p>
-          </div>
-          <div className="bg-surface-container-low p-3 rounded-lg border border-outline-variant/30 col-span-2 md:col-span-1">
-            <p className="text-[10px] uppercase font-bold text-on-surface-variant">REQUIRED DOCS</p>
-            <p className="font-bold">4 Items</p>
-          </div>
-        </div>
-
-        <div className="flex flex-col md:flex-row gap-3">
-          <button 
-            onClick={() => navigate('/document-upload')} 
-            className="flex-1 h-12 bg-primary text-white font-bold rounded-full flex items-center justify-center gap-2 active:scale-95 transition-all"
-          >
-            Start Application <span className="material-symbols-outlined">arrow_forward</span>
-          </button>
-          <button className="h-12 px-6 border-2 border-secondary text-secondary font-bold rounded-full active:scale-95 transition-all">
-            View Requirements
-          </button>
-        </div>
-      </div>
-
-      <Link 
-        to="/id-registration" 
-        className="block bg-surface-container-low border border-outline-variant p-4 rounded-xl flex items-center gap-4 hover:bg-surface-container transition-colors"
-      >
-        <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white">
-          <span className="material-symbols-outlined">badge</span>
-        </div>
-        <div className="flex-1">
-          <h4 className="font-bold">National ID Registration</h4>
-          <p className="text-sm text-on-surface-variant">Apply for digital legal identification</p>
-        </div>
-        <span className="material-symbols-outlined text-primary">chevron_right</span>
-      </Link>
-    </div>
+    <>
+      <main className="pt-20 pb-24 px-margin-mobile max-w-5xl mx-auto">
+{/* Welcome Hero Section */}
+<section className="mb-xl">
+<div className="relative overflow-hidden rounded-xl bg-primary-container p-lg flex flex-col md:flex-row items-center gap-lg">
+<div className="z-10 flex-1">
+<h2 className="font-headline-lg-mobile text-headline-lg-mobile text-on-primary-container mb-xs">Track Your Status</h2>
+<p className="font-body-md text-body-md text-on-primary-container opacity-90">Keep an eye on all your active government filings and identity documents in one secure place.</p>
+</div>
+<div className="hidden md:block w-32 h-32 opacity-20">
+<span className="material-symbols-outlined text-[128px]" data-icon="pending_actions">pending_actions</span>
+</div>
+</div>
+</section>
+{/* Applications Header */}
+<div className="flex items-center justify-between mb-md">
+<h3 className="font-title-lg text-title-lg text-on-surface">My Applications</h3>
+<button className="flex items-center gap-1 text-primary font-label-lg hover:underline">
+                View History <span className="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+{/* Application Grid */}
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+{/* Card 1: Business Permit (Renewing) */}
+<div className="glass-card rounded-xl p-md shadow-sm border-l-4 border-primary transition-all hover:shadow-md cursor-pointer group">
+<div className="flex justify-between items-start mb-md">
+<div className="bg-surface-container p-sm rounded-lg text-primary">
+<span className="material-symbols-outlined" data-icon="store">store</span>
+</div>
+<span className="bg-primary-container text-on-primary-container text-xs px-2 py-1 rounded-full font-label-sm">Renewing</span>
+</div>
+<h4 className="font-title-lg text-body-lg text-on-surface mb-xs group-hover:text-primary transition-colors">Business Permit (Renewing)</h4>
+<div className="flex items-center justify-between text-on-surface-variant font-label-sm mb-sm">
+<span>Progress</span>
+<span className="font-bold">75%</span>
+</div>
+<div className="w-full bg-surface-container-highest h-2 rounded-full mb-md overflow-hidden">
+<div className="bg-primary h-full rounded-full w-3/4"></div>
+</div>
+<div className="flex items-center gap-2 text-on-surface-variant font-label-sm">
+<span className="material-symbols-outlined text-[16px]" data-icon="update">update</span>
+<span>Updated 2 hours ago</span>
+</div>
+</div>
+{/* Card 2: Passport (Completed) */}
+<div className="glass-card rounded-xl p-md shadow-sm border-l-4 border-tertiary transition-all hover:shadow-md cursor-pointer group">
+<div className="flex justify-between items-start mb-md">
+<div className="bg-tertiary-fixed-dim/20 p-sm rounded-lg text-tertiary">
+<span className="material-symbols-outlined" data-icon="passport">downloading</span>
+</div>
+<span className="bg-tertiary-container text-on-tertiary-container text-xs px-2 py-1 rounded-full font-label-sm">Completed</span>
+</div>
+<h4 className="font-title-lg text-body-lg text-on-surface mb-xs group-hover:text-tertiary transition-colors">Passport (Completed)</h4>
+<div className="flex items-center justify-between text-on-surface-variant font-label-sm mb-sm">
+<span>Progress</span>
+<span className="font-bold text-tertiary">100%</span>
+</div>
+<div className="w-full bg-surface-container-highest h-2 rounded-full mb-md overflow-hidden">
+<div className="bg-tertiary h-full rounded-full w-full"></div>
+</div>
+<div className="flex items-center gap-2 text-on-surface-variant font-label-sm">
+<span className="material-symbols-outlined text-[16px]" data-icon="check_circle">check_circle</span>
+<span>Finalized Oct 24, 2023</span>
+</div>
+</div>
+{/* Card 3: National ID (Active) */}
+<div className="glass-card rounded-xl p-md shadow-sm border-l-4 border-secondary transition-all hover:shadow-md cursor-pointer group">
+<div className="flex justify-between items-start mb-md">
+<div className="bg-secondary-container p-sm rounded-lg text-on-secondary-container">
+<span className="material-symbols-outlined" data-icon="badge">badge</span>
+</div>
+<div className="flex items-center gap-1 bg-secondary-container text-on-secondary-container text-xs px-2 py-1 rounded-full font-label-sm">
+<span className="material-symbols-outlined text-[12px]" data-icon="verified" style={{fontVariationSettings: "'FILL' 1",}}>verified</span>
+<span>Active</span>
+</div>
+</div>
+<h4 className="font-title-lg text-body-lg text-on-surface mb-xs group-hover:text-secondary transition-colors">National ID (Active)</h4>
+<p className="font-body-md text-label-sm text-on-surface-variant mb-md">Universal Identity Token #4920-XXX</p>
+<div className="flex items-center justify-between text-on-surface-variant font-label-sm mb-md p-sm bg-surface-container-low rounded-lg">
+<div className="flex items-center gap-2">
+<span className="material-symbols-outlined text-[18px]" data-icon="calendar_today">calendar_today</span>
+<span>Expires 2030</span>
+</div>
+</div>
+<div className="flex items-center gap-2 text-on-surface-variant font-label-sm">
+<span className="material-symbols-outlined text-[16px]" data-icon="history">history</span>
+<span>Last login Nov 12, 2023</span>
+</div>
+</div>
+</div>
+{/* AI Assistant Placeholder (Bento Style) */}
+<div className="mt-xl grid grid-cols-1 md:grid-cols-3 gap-md">
+<div className="md:col-span-2 p-lg rounded-2xl bg-surface-container-lowest shadow-sm border border-outline-variant flex flex-col justify-center min-h-[160px]">
+<div className="flex items-center gap-3 mb-sm">
+<div className="bg-gradient-to-tr from-primary to-secondary w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg">
+<span className="material-symbols-outlined" data-icon="smart_toy">smart_toy</span>
+</div>
+<div>
+<h5 className="font-label-lg text-on-surface">Need help with an application?</h5>
+<p className="font-body-md text-label-sm text-on-surface-variant">Ask me about missing documents or processing times.</p>
+</div>
+</div>
+<div className="flex items-center gap-2 mt-md">
+<button className="bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant font-label-sm px-4 py-2 rounded-full border border-outline-variant">"What's next for my permit?"</button>
+<button className="bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant font-label-sm px-4 py-2 rounded-full border border-outline-variant">"Missing ID requirements"</button>
+</div>
+</div>
+<div className="bg-white rounded-2xl p-md shadow-sm border border-outline-variant relative overflow-hidden flex flex-col items-center justify-center group cursor-pointer">
+<div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+<span className="material-symbols-outlined text-6xl" data-icon="add_circle">add_circle</span>
+</div>
+<div className="bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center text-primary mb-2">
+<span className="material-symbols-outlined text-3xl" data-icon="add">add</span>
+</div>
+<span className="font-label-lg text-primary text-center">New Application</span>
+</div>
+</div>
+</main>
+    </>
   )
 }
 
-export default Dashboard
+export default Dashboard;
