@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
 import { useAuth } from '../context/AuthContext'
 import { generateAIResponse } from '../services/egovService'
 import { processAiReportIntent, IncidentReport } from '../services/eReportService'
@@ -367,9 +368,26 @@ const AIChatHome = () => {
                         : 'bg-white text-on-surface border border-outline-variant/30 rounded-bl-none'
                     }`}
                   >
-                    <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap break-words">
-                      {message.content}
-                    </p>
+                    {message.role === 'assistant' ? (
+                      <div className="prose prose-sm max-w-none text-on-surface
+                        prose-p:leading-relaxed prose-p:my-1.5
+                        prose-strong:font-semibold prose-strong:text-on-surface
+                        prose-ul:my-2 prose-ul:pl-5 prose-li:my-0.5
+                        prose-ol:my-2 prose-ol:pl-5
+                        prose-h1:text-base prose-h1:font-bold prose-h1:mt-3 prose-h1:mb-1
+                        prose-h2:text-sm prose-h2:font-bold prose-h2:mt-2.5 prose-h2:mb-1
+                        prose-h3:text-sm prose-h3:font-semibold prose-h3:mt-2 prose-h3:mb-1
+                        prose-a:text-primary prose-a:underline hover:prose-a:opacity-80
+                        prose-code:bg-surface-container prose-code:px-1 prose-code:rounded prose-code:text-xs prose-code:font-mono
+                        prose-blockquote:border-l-2 prose-blockquote:border-primary/40 prose-blockquote:pl-3 prose-blockquote:text-on-surface-variant prose-blockquote:italic
+                        break-words">
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap break-words">
+                        {message.content}
+                      </p>
+                    )}
 
                     {/* 🟢 AI AUTO-FILED EREPORT SUMMARY CARD */}
                     {message.report && (
