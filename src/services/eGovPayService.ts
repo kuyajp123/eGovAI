@@ -91,8 +91,8 @@ export const createPaymentIntent = async (
       mobile: payload.citizenMobile || '+639090000000',
       email: payload.citizenEmail || 'citizen@egov.ph',
       name: payload.citizenName,
-      callback_url: `${window.location.origin}/payment-callback`,
-      redirect_url: `${window.location.origin}/payment-return`,
+      callback_url: `${window.location.origin}/payment-callback?txnid=${txnid}`,
+      redirect_url: `${window.location.origin}/payment-return?txnid=${txnid}`,
       expires_at: expiresAtStr,
       link_expires_at: expiresAtStr,
       items: payload.items && payload.items.length > 0 ? payload.items : [
@@ -115,7 +115,7 @@ export const createPaymentIntent = async (
     if (res.ok) {
       const result = await res.json()
       const data = result.data || {}
-      return {
+      const intent: PaymentIntent = {
         paymentId: data.uuid || txnid,
         referenceNumber: data.channel?.refno || txnid,
         amount: payload.amount,
@@ -125,6 +125,21 @@ export const createPaymentIntent = async (
         createdAt: new Date().toISOString(),
         expiresAt: expiry.toISOString(),
       }
+
+      // Cache transaction details in localStorage for return lookup
+      try {
+        localStorage.setItem('egov_latest_pending_transaction', JSON.stringify({
+          uuid: data.uuid || txnid,
+          txnid,
+          amount: payload.amount,
+          description: payload.description,
+          createdAt: new Date().toISOString(),
+        }))
+      } catch (e) {
+        console.warn('Could not cache pending transaction:', e)
+      }
+
+      return intent
     }
 
     const errorJson = await res.json().catch(() => ({}))
