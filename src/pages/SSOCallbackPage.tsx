@@ -24,7 +24,7 @@ const SSOCallbackPage = () => {
         return
       }
 
-      // Exchange code for SSO-scoped access token
+      // ── Step 1: Exchange code → access_token ──────────────────────────────
       const tokenRes = await fetch('/egov-api/api/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -41,27 +41,56 @@ const SSOCallbackPage = () => {
         throw new Error(err.message || err.error_description || `Token exchange failed (${tokenRes.status})`)
       }
 
-      const data = await tokenRes.json()
-      console.log('SSO token response:', data)
+      const tokenData = await tokenRes.json()
+      console.log('SSO token response:', tokenData)
 
-      // Build user from response — map whatever fields eGov returns
+      const accessToken = tokenData.access_token
+      if (!accessToken) {
+        throw new Error('No access_token returned from eGovPH')
+      }
+
+      // ── Step 2: Use access_token → fetch user profile ─────────────────────
+      const profileRes = await fetch('/egov-api/api/partner/sso_authentication', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          partner_code: import.meta.env.VITE_EGOV_PARTNER_CODE,
+          partner_secret: import.meta.env.VITE_EGOV_PARTNER_SECRET,
+        }),
+      })
+
+      if (!profileRes.ok) {
+        const err = await profileRes.json().catch(() => ({}))
+        throw new Error(err.message || err.error_description || `Profile fetch failed (${profileRes.status})`)
+      }
+
+      const profile = await profileRes.json()
+      console.log('SSO profile response:', profile)
+
+      // eGovPH may nest user data under a key — unwrap if needed
+      const d = profile.data || profile.user || profile
+
+      // ── Step 3: Build & store the user object ─────────────────────────────
       const user: User = {
-        id: data.uniqid || data.user_id || data.id || exchangeCode,
-        uniqid: data.uniqid || data.user_id || data.id || '',
-        firstName: data.first_name || data.firstName || '',
-        middleName: data.middle_name || data.middleName,
-        lastName: data.last_name || data.lastName || '',
-        suffix: data.suffix,
-        birthdate: data.birthdate || data.birth_date || '',
-        email: data.email || '',
-        mobileNumber: data.mobile_number || data.mobileNumber || data.phone || '',
+        id: d.uniqid || d.user_id || d.id || exchangeCode,
+        uniqid: d.uniqid || d.user_id || d.id || '',
+        firstName: d.first_name || d.firstName || '',
+        middleName: d.middle_name || d.middleName,
+        lastName: d.last_name || d.lastName || '',
+        suffix: d.suffix,
+        birthdate: d.birthdate || d.birth_date || '',
+        email: d.email || '',
+        mobileNumber: d.mobile_number || d.mobileNumber || d.phone || '',
         address: {
-          street: data.address?.street,
-          barangay: data.address?.barangay,
-          city: data.address?.city || '',
-          province: data.address?.province || '',
-          region: data.address?.region || '',
-          zipCode: data.address?.zip_code || data.address?.zipCode,
+          street: d.address?.street || d.street,
+          barangay: d.address?.barangay || d.barangay,
+          city: d.address?.city || d.city || '',
+          province: d.address?.province || d.province || '',
+          region: d.address?.region || d.region || '',
+          zipCode: d.address?.zip_code || d.address?.zipCode || d.zip_code,
         },
         registeredAt: new Date().toISOString(),
         lastLogin: new Date().toISOString(),
