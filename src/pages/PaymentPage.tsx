@@ -1,8 +1,4 @@
-import { useNavigate } from "react-router-dom"
-
-
 const PaymentPage = () => {
-  const navigate = useNavigate();
   return (
     <>
       <main className="mt-20 px-margin-mobile md:px-margin-tablet max-w-5xl mx-auto space-y-lg">

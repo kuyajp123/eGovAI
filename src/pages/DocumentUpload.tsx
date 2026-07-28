@@ -1,8 +1,4 @@
-import { useNavigate } from "react-router-dom"
-
-
 const DocumentUpload = () => {
-  const navigate = useNavigate();
   return (
     <>
       <main className="pt-20 pb-28 px-margin-mobile max-w-2xl mx-auto space-y-lg">

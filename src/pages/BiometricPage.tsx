@@ -1,9 +1,4 @@
-import { useNavigate } from "react-router-dom"
-import { useState, useEffect } from 'react'
-
-
 const BiometricPage = () => {
-  const navigate = useNavigate();
   return (
     <>
       <main className="flex-grow pt-24 pb-12 px-margin-mobile flex flex-col items-center max-w-lg mx-auto w-full">
@@ -32,8 +27,8 @@ const BiometricPage = () => {
 <div className="scan-line"></div>
 {/* Scanning Progress Ring (Visual Only) */}
 <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100">
-<circle className="opacity-80" cx="50" cy="50" fill="none" r="48" stroke="#16B6A6" stroke-dasharray="301.59" stroke-dashoffset="150" strokeWidth="2">
-<animate attributename="stroke-dashoffset" dur="4s" from="301.59" repeatcount="indefinite" to="0"></animate>
+<circle className="opacity-80" cx="50" cy="50" fill="none" r="48" stroke="#16B6A6" strokeDasharray="301.59" strokeDashoffset="150" strokeWidth="2">
+<animate attributeName="stroke-dashoffset" dur="4s" from="301.59" repeatCount="indefinite" to="0"></animate>
 </circle>
 </svg>
 </div>

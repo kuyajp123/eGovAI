@@ -1,7 +1,6 @@
-import { useNavigate, Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
 const Dashboard = () => {
-  const navigate = useNavigate();
   return (
     <>
       <main className="pt-20 pb-24 px-margin-mobile max-w-5xl mx-auto">

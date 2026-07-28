@@ -1,7 +1,4 @@
-import { useNavigate } from "react-router-dom"
-
 const ActivityPage = () => {
-  const navigate = useNavigate();
   return (
     <>
       <main className="pt-20 px-margin-mobile max-w-5xl mx-auto space-y-lg">

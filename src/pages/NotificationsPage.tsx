@@ -1,7 +1,4 @@
-import { useNavigate } from "react-router-dom"
-
 const NotificationsPage = () => {
-  const navigate = useNavigate();
   return (
     <>
       <main className="max-w-2xl mx-auto px-margin-mobile pt-lg space-y-lg">

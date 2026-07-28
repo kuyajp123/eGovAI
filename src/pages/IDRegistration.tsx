@@ -33,7 +33,7 @@ const IDRegistration = () => {
 {/* Verification Methods (Bento-lite) */}
 <div className="grid grid-cols-1 gap-4 mb-10">
 {/* National ID */}
-<button className="verification-card flex items-center p-5 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm text-left hover:border-primary group" onClick={() => { selectMethod(this) }}>
+<button className="verification-card flex items-center p-5 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm text-left hover:border-primary group" onClick={() => navigate('/document-upload')}>
 <div className="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center mr-4 group-hover:bg-primary-container group-hover:text-on-primary-container transition-colors">
 <span className="material-symbols-outlined text-[28px]" data-icon="badge">badge</span>
 </div>
@@ -46,7 +46,7 @@ const IDRegistration = () => {
 </div>
 </button>
 {/* Face Verification */}
-<button className="verification-card flex items-center p-5 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm text-left hover:border-primary group" onClick={() => { selectMethod(this) }}>
+<button className="verification-card flex items-center p-5 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm text-left hover:border-primary group" onClick={() => navigate('/face-liveness')}>
 <div className="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center mr-4 group-hover:bg-primary-container group-hover:text-on-primary-container transition-colors">
 <span className="material-symbols-outlined text-[28px]" data-icon="face">face</span>
 </div>
@@ -59,7 +59,7 @@ const IDRegistration = () => {
 </div>
 </button>
 {/* Gov Account */}
-<button className="verification-card flex items-center p-5 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm text-left hover:border-primary group" onClick={() => { selectMethod(this) }}>
+<button className="verification-card flex items-center p-5 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm text-left hover:border-primary group" onClick={() => navigate('/egovph/sso')}>
 <div className="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center mr-4 group-hover:bg-primary-container group-hover:text-on-primary-container transition-colors">
 <span className="material-symbols-outlined text-[28px]" data-icon="login">login</span>
 </div>

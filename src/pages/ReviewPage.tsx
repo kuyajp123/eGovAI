@@ -1,8 +1,4 @@
-import { useNavigate } from "react-router-dom"
-
-
 const ReviewPage = () => {
-  const navigate = useNavigate();
   return (
     <>
       <main className="flex-grow pt-24 pb-32 px-margin-mobile max-w-2xl mx-auto w-full">

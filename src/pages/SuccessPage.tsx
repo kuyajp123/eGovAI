@@ -1,8 +1,4 @@
-import { useNavigate } from "react-router-dom"
-
-
 const SuccessPage = () => {
-  const navigate = useNavigate();
   return (
     <>
       <main className="flex-grow flex flex-col items-center justify-center px-margin-mobile py-xl mt-touch-target mb-24 overflow-x-hidden">

@@ -1,8 +1,4 @@
-import { useNavigate } from "react-router-dom"
-import { useState, useEffect } from 'react'
-
 const FaceLivenessPage = () => {
-  const navigate = useNavigate();
   return (
     <>
       <main className="relative flex flex-col items-center justify-start h-[calc(100vh-44px)] px-margin-mobile">
