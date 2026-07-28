@@ -64,7 +64,8 @@ export const sendVerificationConfirmation = (mobile: string, name: string) =>
   sendSMS({
     number: mobile,
     message:
-      `[eGovPH] Magandang araw, ${name}! Your identity has been successfully verified via PhilSys. ` +
+      `[eGovPH] Magandang araw, ${name}! ` +
+      `Your identity has been successfully verified via PhilSys NIDAS. ` +
       `You may now proceed with your government service transaction. — GovAssistant`,
   })
 
@@ -78,9 +79,10 @@ export const sendPaymentConfirmation = (
   sendSMS({
     number: mobile,
     message:
-      `[eGovPH] Payment Confirmed! Hi ${name}, your payment of ₱${amount.toLocaleString()} ` +
-      `has been received. Reference No: ${reference}. ` +
-      `Keep this for your records. — GovAssistant`,
+      `[eGovPH] Payment Confirmed! Hi ${name}, ` +
+      `your payment of PHP ${amount.toLocaleString()} has been received. ` +
+      `Reference No: ${reference}. ` +
+      `Please keep this reference number for your records. — GovAssistant`,
   })
 
 /** Sent after a business permit / tax application is submitted */
@@ -93,8 +95,9 @@ export const sendApplicationConfirmation = (
   sendSMS({
     number: mobile,
     message:
-      `[eGovPH] Application Submitted! Hi ${name}, your ${service} application has been filed. ` +
-      `Tracking ID: ${trackingId}. You can monitor progress at e.gov.ph. — GovAssistant`,
+      `[eGovPH] Application Submitted! Hi ${name}, ` +
+      `your ${service} application has been filed and is now being processed. ` +
+      `Tracking ID: ${trackingId}. — GovAssistant`,
   })
 
 // ── Helpers ────────────────────────────────────────────────

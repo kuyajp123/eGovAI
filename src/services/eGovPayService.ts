@@ -1,7 +1,7 @@
 // ============================================================
 // eGovPay Service — Government Payment Gateway
-// POST /payments/v1/intent  (proxied via /egovpay-api)
-// Auth header: Authorization: Bearer <api-key>
+// POST /api/v1/transaction  (proxied via /egovpay-api)
+// Auth Header: X-eGovPay-Token: test_<TOKEN_KEY>
 // ============================================================
 
 const EGOVPAY_BASE = '/egovpay-api'
@@ -9,12 +9,12 @@ const EGOVPAY_API_KEY = import.meta.env.VITE_EGOVPAY_API_KEY
 const SETTLEMENT_UUID = import.meta.env.VITE_EGOVPAY_SETTLEMENT_UUID
 
 export interface PaymentIntentPayload {
-  amount: number       // in PHP, e.g. 5000
+  amount: number       // total PHP amount
   description: string  // "Business Permit Renewal — Juan Dela Cruz"
   citizenName: string
   citizenEmail?: string
   citizenMobile?: string
-  metadata?: Record<string, string>
+  items?: Array<{ name: string; amount: number }>
 }
 
 export interface PaymentIntent {
@@ -29,102 +29,110 @@ export interface PaymentIntent {
   expiresAt: string
 }
 
-export interface PaymentStatus {
-  paymentId: string
-  status: 'pending' | 'paid' | 'failed' | 'cancelled'
-  referenceNumber: string
-  paidAt?: string
+/**
+ * Compute HMAC-SHA256 digest: hash_hmac('sha256', "$amount|$txnid", $token)
+ */
+async function computeDigest(amount: number, txnid: string, token: string): Promise<string> {
+  const secretKey = token.replace(/^test_/, '')
+  const encoder = new TextEncoder()
+  const keyData = encoder.encode(secretKey)
+  const messageData = encoder.encode(`${amount}|${txnid}`)
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData)
+  return Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+function formatDateForEGovPay(date: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
 /**
- * Create a payment intent and get a hosted payment URL.
- * Falls back to a rich mock that shows the full payment UI.
+ * Create a payment transaction link via eGovPay API.
  */
 export const createPaymentIntent = async (
   payload: PaymentIntentPayload
 ): Promise<PaymentIntent> => {
-  const useMock = import.meta.env.VITE_USE_MOCK_SERVICES !== 'false'
+  const useMock = import.meta.env.VITE_USE_MOCK_SERVICES === 'true'
 
   if (!useMock) {
-    try {
-      const res = await fetch(`${EGOVPAY_BASE}/payments/v1/intent`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${EGOVPAY_API_KEY}`,
-        },
-        body: JSON.stringify({
-          settlement_template_uuid: SETTLEMENT_UUID,
-          amount: payload.amount * 100, // eGovPay uses centavos
-          currency: 'PHP',
-          description: payload.description,
-          payer_name: payload.citizenName,
-          payer_email: payload.citizenEmail || '',
-          payer_phone: payload.citizenMobile || '',
-          metadata: payload.metadata || {},
-        }),
-      })
+    const txnid = generateRef()
+    const digest = await computeDigest(payload.amount, txnid, EGOVPAY_API_KEY)
+    const now = new Date()
+    const expiry = new Date(now.getTime() + 24 * 60 * 60 * 1000) // 24 hours
+    const expiresAtStr = formatDateForEGovPay(expiry)
 
-      if (res.ok) {
-        const data = await res.json()
-        return {
-          paymentId: data.payment_id || data.id || generatePaymentId(),
-          referenceNumber: data.reference_number || data.ref || generateRef(),
+    const requestBody = {
+      amount: payload.amount,
+      settlement_template_uuid: SETTLEMENT_UUID,
+      currency: 'PHP',
+      digest,
+      txnid,
+      mobile: payload.citizenMobile || '+639090000000',
+      email: payload.citizenEmail || 'citizen@egov.ph',
+      name: payload.citizenName,
+      callback_url: `${window.location.origin}/payment-callback`,
+      redirect_url: `${window.location.origin}/payment-success`,
+      expires_at: expiresAtStr,
+      link_expires_at: expiresAtStr,
+      items: payload.items && payload.items.length > 0 ? payload.items : [
+        {
+          name: payload.description,
           amount: payload.amount,
-          description: payload.description,
-          paymentUrl: data.payment_url || data.checkout_url || '#',
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-        }
-      }
-    } catch (err) {
-      console.warn('eGovPay API call failed, falling back to mock intent:', err)
+        },
+      ],
     }
+
+    const res = await fetch(`${EGOVPAY_BASE}/api/v1/transaction`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'X-eGovPay-Token': EGOVPAY_API_KEY,
+      },
+      body: JSON.stringify(requestBody),
+    })
+
+    if (res.ok) {
+      const result = await res.json()
+      const data = result.data || {}
+      return {
+        paymentId: data.uuid || txnid,
+        referenceNumber: data.channel?.refno || txnid,
+        amount: payload.amount,
+        description: payload.description,
+        paymentUrl: data.url || `https://egovpay-pgi-dev.oueg.info/${data.uuid}`,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        expiresAt: expiry.toISOString(),
+      }
+    }
+
+    const errorJson = await res.json().catch(() => ({}))
+    throw new Error(
+      errorJson.message || errorJson.error || `eGovPay Transaction error (HTTP ${res.status})`
+    )
   }
 
-  // ── Mock fallback — simulates a successful payment intent ──
-  await delay(1500)
+  // Demo fallback mode when VITE_USE_MOCK_SERVICES is set to true
+  await new Promise(r => setTimeout(r, 1200))
   const ref = generateRef()
   return {
     paymentId: generatePaymentId(),
     referenceNumber: ref,
     amount: payload.amount,
     description: payload.description,
-    paymentUrl: `https://hackathon-pay.e.gov.ph/checkout/${ref}`,
+    paymentUrl: `https://egovpay-pgi-dev.oueg.info/${ref}`,
     status: 'pending',
     createdAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-  }
-}
-
-/**
- * Poll the status of an existing payment.
- */
-export const getPaymentStatus = async (paymentId: string): Promise<PaymentStatus> => {
-  try {
-    const res = await fetch(`${EGOVPAY_BASE}/payments/v1/status/${paymentId}`, {
-      headers: { 'Authorization': `Bearer ${EGOVPAY_API_KEY}` },
-    })
-    if (res.ok) {
-      const data = await res.json()
-      return {
-        paymentId,
-        status: data.status || 'pending',
-        referenceNumber: data.reference_number || '',
-        paidAt: data.paid_at,
-      }
-    }
-  } catch (err) {
-    console.warn('eGovPay status check error:', err)
-  }
-
-  // Mock: return paid after 3 seconds
-  return {
-    paymentId,
-    status: 'paid',
-    referenceNumber: generateRef(),
-    paidAt: new Date().toISOString(),
   }
 }
 
@@ -177,6 +185,4 @@ const generatePaymentId = () =>
   `PAY-${Date.now().toString(36).toUpperCase()}`
 
 const generateRef = () =>
-  `EGPAY-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
-
-const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
+  `TESTREF${Math.floor(100000 + Math.random() * 900000)}`

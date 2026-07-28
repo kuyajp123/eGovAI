@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { verifyIdentity, VerifyResult } from '../services/eVerifyService'
+import { verifyIdentity, triggerEVerifyLivenessSDK, VerifyResult } from '../services/eVerifyService'
+import { createLivenessSession } from '../services/faceLivenessService'
 import {
   createPaymentIntent,
   PaymentIntent,
@@ -142,20 +143,47 @@ const BusinessServicesPage = () => {
     setVerifying(true)
     setVerifyError(null)
     try {
+      let livenessSessionId = ''
+
+      // 1. Try launching the official eVerify Face Liveness Web SDK window.eKYC().start({ pubKey })
+      try {
+        livenessSessionId = await triggerEVerifyLivenessSDK()
+      } catch (sdkErr) {
+        console.warn('eVerify Web SDK popup error or skipped:', sdkErr)
+        livenessSessionId = localStorage.getItem('egov_liveness_token') || ''
+      }
+
+      if (!livenessSessionId) {
+        // Generate via session endpoint if Web SDK window was blocked
+        try {
+          const session = await createLivenessSession({ action: 'close', delay: 3000 })
+          livenessSessionId = session.token
+        } catch {
+          livenessSessionId = ''
+        }
+      }
+
+      if (!livenessSessionId) {
+        throw new Error('Face Liveness Session Required: Please complete biometric verification.')
+      }
+
+      // 2. Query eVerify API with demographics and face_liveness_session_id
       const result = await verifyIdentity({
-        uniqid: user?.uniqid || user?.id,
-        mobileNumber: user?.mobileNumber,
-        firstName: user?.firstName,
-        lastName: user?.lastName,
-        birthdate: user?.birthdate,
+        firstName: user?.firstName || 'Juan',
+        middleName: user?.middleName || '',
+        lastName: user?.lastName || 'Dela Cruz',
+        suffix: user?.suffix || '',
+        birthDate: user?.birthdate || '1990-01-01',
+        faceLivenessSessionId: livenessSessionId,
       })
       setVerifyResult(result)
 
       if (result.verified && user?.mobileNumber) {
         await sendVerificationConfirmation(user.mobileNumber, user.firstName || 'Citizen')
       }
-    } catch {
-      setVerifyError('Identity verification failed. Please try again.')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Identity verification failed. Please try again.'
+      setVerifyError(msg)
     } finally {
       setVerifying(false)
     }
@@ -173,16 +201,13 @@ const BusinessServicesPage = () => {
         citizenName,
         citizenEmail: user?.email,
         citizenMobile: user?.mobileNumber,
-        metadata: {
-          service_type: selectedService.id,
-          tracking_id: trackingId,
-          tin: tin,
-        },
+        items: fees.map(f => ({ name: f.label, amount: f.amount })),
       })
       setPaymentIntent(intent)
       setStep('payment')
-    } catch {
-      alert('Unable to create payment intent. Please try again.')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unable to create payment intent. Please try again.'
+      alert(msg)
     } finally {
       setPaying(false)
     }
