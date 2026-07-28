@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard'
 import IDRegistration from './pages/IDRegistration'
 import DocumentUpload from './pages/DocumentUpload'
 import BiometricPage from './pages/BiometricPage'
+import FaceLivenessPage from './pages/FaceLivenessPage'
 import ReviewPage from './pages/ReviewPage'
 import PaymentPage from './pages/PaymentPage'
 import SuccessPage from './pages/SuccessPage'
@@ -37,6 +38,7 @@ function App() {
           <Route path="/id-registration" element={<ProtectedRoute><IDRegistration /></ProtectedRoute>} />
           <Route path="/document-upload" element={<ProtectedRoute><DocumentUpload /></ProtectedRoute>} />
           <Route path="/biometric" element={<ProtectedRoute><BiometricPage /></ProtectedRoute>} />
+          <Route path="/face-liveness" element={<ProtectedRoute><FaceLivenessPage /></ProtectedRoute>} />
           <Route path="/review" element={<ProtectedRoute><ReviewPage /></ProtectedRoute>} />
           <Route path="/payment" element={<ProtectedRoute><PaymentPage /></ProtectedRoute>} />
           <Route path="/success" element={<ProtectedRoute><SuccessPage /></ProtectedRoute>} />

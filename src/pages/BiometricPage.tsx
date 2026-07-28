@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 const BiometricPage = () => {
   const navigate = useNavigate()
-  const [status, setStatus] = useState("Scanning...")
+  const [status] = useState("Scanning...")
 
   useEffect(() => {
     const timer = setTimeout(() => {

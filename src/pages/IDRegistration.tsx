@@ -38,7 +38,7 @@ const IDRegistration = () => {
       </div>
 
       <button 
-        onClick={() => navigate('/biometric')} 
+        onClick={() => navigate('/face-liveness')} 
         className="fixed bottom-24 right-6 bg-primary text-white font-bold px-8 py-4 rounded-full shadow-xl flex items-center gap-3 transition-all active:scale-95"
       >
         Start Registration <span className="material-symbols-outlined">arrow_forward</span>
