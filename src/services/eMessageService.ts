@@ -29,29 +29,32 @@ export const sendSMS = async (payload: SMSPayload): Promise<SMSResult> => {
     return { success: false, message: 'Invalid mobile number.' }
   }
 
-  try {
-    const res = await fetch(`${EMESSAGE_BASE}/messaging/v1/sms/push`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-EMESSAGE-Auth': EMESSAGE_TOKEN,
-      },
-      body: JSON.stringify({ number, message: payload.message }),
-    })
+  const useMock = import.meta.env.VITE_USE_MOCK_SERVICES !== 'false'
 
-    if (res.status === 201 || res.ok) {
-      const data = await res.json().catch(() => ({}))
-      console.log('eMessage SMS sent:', number, data)
-      return { success: true, message: data?.data?.message || 'SMS sent successfully.' }
+  if (!useMock) {
+    try {
+      const res = await fetch(`${EMESSAGE_BASE}/messaging/v1/sms/push`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-EMESSAGE-Auth': EMESSAGE_TOKEN,
+        },
+        body: JSON.stringify({ number, message: payload.message }),
+      })
+
+      if (res.status === 201 || res.ok) {
+        const data = await res.json().catch(() => ({}))
+        console.log('eMessage SMS sent:', number, data)
+        return { success: true, message: data?.data?.message || 'SMS sent successfully.' }
+      }
+    } catch (err) {
+      console.warn('eMessage network error:', err)
     }
-
-    console.warn(`eMessage API status ${res.status}, queued in demo mode.`)
-    return { success: true, message: 'SMS notification queued.' }
-  } catch (err) {
-    console.warn('eMessage network error (SMS not sent):', err)
-    // Silently succeed — notifications are non-blocking
-    return { success: true, message: 'SMS queued (offline mode).' }
   }
+
+  // Demo / Mock queued fallback
+  console.log('[eMessage Demo] SMS Queued for delivery to:', number, 'Message:', payload.message)
+  return { success: true, message: 'SMS notification queued (Demo mode).' }
 }
 
 // ── Pre-built message templates ────────────────────────────

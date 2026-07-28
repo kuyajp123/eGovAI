@@ -7,6 +7,7 @@
 const EVERIFY_BASE = '/everify-api'
 const CLIENT_ID = import.meta.env.VITE_EVERIFY_CLIENT_ID
 const CLIENT_SECRET = import.meta.env.VITE_EVERIFY_CLIENT_SECRET
+const PUBKEY = import.meta.env.VITE_EVERIFY_PUBKEY
 
 export interface VerifyPayload {
   /** eGovPH citizen unique ID or mobile number */
@@ -42,6 +43,7 @@ export const verifyIdentity = async (payload: VerifyPayload): Promise<VerifyResu
         body: JSON.stringify({
           client_id: CLIENT_ID,
           client_secret: CLIENT_SECRET,
+          pubkey: PUBKEY,
           ...payload,
         }),
       })

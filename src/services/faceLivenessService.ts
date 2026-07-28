@@ -5,7 +5,8 @@ import {
   CONFIDENCE_THRESHOLD,
 } from '../types/faceLiveness'
 
-const LIVENESS_BASE_URL = import.meta.env.VITE_FACE_LIVENESS_URL
+// Uses the Vite proxy /face-liveness-api -> https://hackathon-face-liveness.e.gov.ph
+const LIVENESS_BASE_URL = import.meta.env.VITE_FACE_LIVENESS_URL || '/face-liveness-api'
 const API_KEY = import.meta.env.VITE_FACE_LIVENESS_API_KEY
 
 /**
@@ -14,61 +15,62 @@ const API_KEY = import.meta.env.VITE_FACE_LIVENESS_API_KEY
 export async function createLivenessSession(
   request: CreateSessionRequest
 ): Promise<CreateSessionResponse> {
-  try {
-    const response = await fetch(`${LIVENESS_BASE_URL}/v1/liveness/session`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': API_KEY,
-      },
-      body: JSON.stringify(request),
-    })
+  const response = await fetch(`${LIVENESS_BASE_URL}/v1/liveness/session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': API_KEY,
+    },
+    body: JSON.stringify(request),
+  })
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(error.message || 'Failed to create liveness session')
-    }
-
-    const data = await response.json()
-    return data
-  } catch (error) {
-    console.error('Create liveness session failed:', error)
-    throw error
+  // Guard against HTML error pages (proxy misconfiguration / network error)
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) {
+    const text = await response.text()
+    throw new Error(
+      `Face Liveness API returned unexpected content (HTTP ${response.status}). ` +
+      `Check that the proxy is correctly configured. Preview: ${text.slice(0, 80)}`
+    )
   }
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || `Face Liveness session error (HTTP ${response.status})`)
+  }
+
+  return response.json()
 }
 
 /**
- * Get verification result for a liveness session
+ * Get verification result for a liveness session.
+ * Enforces: status === "SUCCEEDED" AND confidence_score >= 95.0
  */
 export async function getVerificationResult(
   sessionToken: string
 ): Promise<VerificationResult> {
-  try {
-    const response = await fetch(
-      `${LIVENESS_BASE_URL}/v1/liveness/result/${sessionToken}`,
-      {
-        method: 'GET',
-        headers: {
-          'x-api-key': API_KEY,
-        },
-      }
-    )
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(error.message || 'Failed to get verification result')
+  const response = await fetch(
+    `${LIVENESS_BASE_URL}/v1/liveness/result/${sessionToken}`,
+    {
+      method: 'GET',
+      headers: {
+        'x-api-key': API_KEY,
+      },
     }
+  )
 
-    const data = await response.json()
-    return data
-  } catch (error) {
-    console.error('Get verification result failed:', error)
-    throw error
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || 'Failed to get verification result')
   }
+
+  return response.json()
 }
 
 /**
- * Validate verification result against security thresholds
+ * Validate result against eGovPH security thresholds:
+ * - status must be exactly "SUCCEEDED"
+ * - confidence_score must be >= 95.0
  */
 export function isVerificationValid(result: VerificationResult): boolean {
   return (
@@ -78,39 +80,15 @@ export function isVerificationValid(result: VerificationResult): boolean {
 }
 
 /**
- * Create a redirect flow liveness session
+ * Start a redirect-flow liveness session.
+ * Redirects the user to the eGovPH-hosted liveness page for real AI detection.
+ * After completion, eGovPH redirects back to callbackUrl.
  */
-export async function createRedirectSession(
-  callbackUrl: string,
-  delay: number = 3000
-): Promise<CreateSessionResponse> {
-  return createLivenessSession({
+export async function startLivenessRedirect(callbackUrl: string): Promise<{ token: string; url: string }> {
+  const session = await createLivenessSession({
     action: 'redirect',
     callback_url: callbackUrl,
-    delay,
+    delay: 3000,
   })
-}
-
-/**
- * Create a post message flow liveness session
- */
-export async function createPostMessageSession(
-  delay: number = 3000
-): Promise<CreateSessionResponse> {
-  return createLivenessSession({
-    action: 'post',
-    delay,
-  })
-}
-
-/**
- * Create a close flow liveness session
- */
-export async function createCloseSession(
-  delay: number = 3000
-): Promise<CreateSessionResponse> {
-  return createLivenessSession({
-    action: 'close',
-    delay,
-  })
+  return { token: session.token, url: session.url }
 }

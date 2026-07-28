@@ -23,6 +23,7 @@ export interface User extends EGovUser {
   lastLogin: string
   profileLocked: boolean
   ssoProvider: 'egovph'
+  profilePhotoUrl?: string
 }
 
 export interface AuthState {
