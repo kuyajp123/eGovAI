@@ -3,7 +3,6 @@ import {
   generateAccessToken,
   generateExchangeCode,
   buildTestCallbackUrl,
-  testSSOFlow,
 } from '../utils/egovTestHelper'
 
 const TestSSOPage = () => {
@@ -57,17 +56,39 @@ const TestSSOPage = () => {
     setCallbackUrl('')
 
     try {
-      await testSSOFlow(testAccountId || undefined)
-      // The flow logs everything to console
-      // Now generate for display
+      console.log('🔐 Starting SSO test flow...')
+      console.log('Environment:', {
+        baseUrl: import.meta.env.VITE_EGOV_SSO_URL,
+        partnerCode: import.meta.env.VITE_EGOV_PARTNER_CODE,
+        hasSecret: !!import.meta.env.VITE_EGOV_PARTNER_SECRET,
+      })
+
+      // Step 1: Generate access token
+      console.log('Step 1: Generating access token...')
       const token = await generateAccessToken()
       setAccessToken(token.access_token)
+      console.log('✅ Access token generated')
+
+      // Step 2: Generate exchange code
+      console.log('Step 2: Generating exchange code...')
       const exchange = await generateExchangeCode(token.access_token, testAccountId || undefined)
       setExchangeCode(exchange.exchange_code)
+      console.log('✅ Exchange code generated:', exchange.exchange_code)
+
+      // Step 3: Build callback URL
       const url = buildTestCallbackUrl(exchange.exchange_code)
       setCallbackUrl(url)
+      console.log('✅ Callback URL built:', url)
+      console.log('🎉 Test flow complete!')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Test flow failed')
+      console.error('❌ Test flow failed:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Test flow failed'
+      setError(errorMessage)
+      
+      // Show more details in production
+      if (err instanceof Error && err.message.includes('Failed to fetch')) {
+        setError('Network error: Cannot reach eGovPH API. Check CORS settings or API URL.')
+      }
     } finally {
       setLoading(false)
     }
@@ -121,11 +142,22 @@ const TestSSOPage = () => {
       </div>
 
       {error && (
-        <div className="bg-error-container border border-error p-4 rounded-xl mb-6 flex gap-3">
-          <span className="material-symbols-outlined text-error">error</span>
-          <div className="flex-1">
-            <h4 className="font-bold text-on-error-container">Error</h4>
-            <p className="text-sm text-on-error-container">{error}</p>
+        <div className="bg-error-container border border-error p-4 rounded-xl mb-6">
+          <div className="flex gap-3">
+            <span className="material-symbols-outlined text-error">error</span>
+            <div className="flex-1">
+              <h4 className="font-bold text-on-error-container">Error</h4>
+              <p className="text-sm text-on-error-container mb-3">{error}</p>
+              <details className="text-xs text-on-error-container">
+                <summary className="cursor-pointer font-bold">Troubleshooting</summary>
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>Check browser console for detailed error logs</li>
+                  <li>Verify environment variables are set in Vercel</li>
+                  <li>Ensure API endpoint is accessible: {import.meta.env.VITE_EGOV_SSO_URL}</li>
+                  <li>Partner code: {import.meta.env.VITE_EGOV_PARTNER_CODE || 'NOT SET'}</li>
+                </ul>
+              </details>
+            </div>
           </div>
         </div>
       )}

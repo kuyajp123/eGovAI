@@ -1,4 +1,3 @@
-import { EGOV_CONFIG } from '../config/egov.config'
 import { useNavigate } from 'react-router-dom'
 
 const EGovSignInButton = () => {
