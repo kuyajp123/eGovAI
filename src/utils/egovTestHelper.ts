@@ -35,7 +35,6 @@ export async function generateAccessToken(): Promise<EGovAccessToken> {
       body: JSON.stringify({
         partner_code: PARTNER_CODE,
         partner_secret: PARTNER_SECRET,
-        scope: 'mint',
       }),
     })
 
@@ -55,25 +54,24 @@ export async function generateAccessToken(): Promise<EGovAccessToken> {
 }
 
 /**
- * Generate exchange code using test eGov identity
+ * Generate exchange code using SSO authentication endpoint
  */
 export async function generateExchangeCode(
   accessToken: string,
   testAccountId?: string
 ): Promise<EGovExchangeCode> {
   try {
-    console.log('🎫 Generating exchange code...')
-    console.log('Test Account:', testAccountId || 'default_test_account')
+    console.log('🎫 Generating exchange code via SSO authentication...')
+    console.log('Test Account:', testAccountId || 'default')
     
-    const response = await fetch(`${EGOV_BASE_URL}/api/mint`, {
+    const response = await fetch(`${EGOV_BASE_URL}/api/partner/sso_authentication`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
-        test_account: testAccountId || 'default_test_account',
-        partner_code: PARTNER_CODE,
+        test_account: testAccountId || undefined,
       }),
     })
 
