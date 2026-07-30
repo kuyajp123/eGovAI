@@ -1983,7 +1983,7 @@ const AIChatHome = () => {
             {/* eReport Quick Action Banner */}
             <div
               onClick={() => navigate('/ereport')}
-              className="w-full p-4 rounded-2xl bg-gradient-to-r from-red-600 to-rose-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center justify-between gap-4 group"
+              className="w-full p-4 rounded-2xl bg-gradient-to-r from-red-200 to-rose-300 text-black shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center justify-between gap-4 group"
             >
               <div className="flex items-center gap-3 text-left">
                 <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
@@ -1994,11 +1994,11 @@ const AIChatHome = () => {
                 <div>
                   <h3 className="font-bold text-sm flex items-center gap-1.5">
                     File an Emergency or Public Report (eReport)
-                    <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-white/20 text-white">
+                    <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-white/20 text-slate-800">
                       Live
                     </span>
                   </h3>
-                  <p className="text-xs text-white/90">
+                  <p className="text-xs text-black/90">
                     Report potholes, public hazards, sanitation, or emergency incidents instantly.
                   </p>
                 </div>
