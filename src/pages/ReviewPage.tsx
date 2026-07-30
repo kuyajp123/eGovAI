@@ -1,3 +1,5 @@
+import EBuddyMascot from '../components/EBuddyMascot'
+
 const ReviewPage = () => {
   return (
     <>
@@ -53,8 +55,8 @@ const ReviewPage = () => {
 </section>
 {/* AI Agent Reassurance Bubble */}
 <div className="ai-accent-border bg-white p-lg rounded-xl shadow-md mb-lg flex gap-md items-start">
-<div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center shrink-0">
-<span className="material-symbols-outlined text-secondary" data-icon="smart_toy">smart_toy</span>
+<div className="w-10 h-10 rounded-full bg-white border border-secondary/20 flex items-center justify-center shrink-0 overflow-hidden">
+<EBuddyMascot alt="" className="w-full h-full p-0.5" />
 </div>
 <div>
 <p className="font-body-md text-body-md text-on-surface leading-relaxed">
@@ -70,7 +72,7 @@ const ReviewPage = () => {
 <input className="peer h-6 w-6 rounded border-outline text-primary focus:ring-primary-container transition-all" id="consent" type="checkbox"/>
 </div>
 <span className="font-body-md text-body-md text-on-surface-variant leading-snug">
-                    I authorize the AI assistant to submit this application on my behalf.
+                    I authorize eBuddy to submit this application on my behalf.
                 </span>
 </label>
 </div>

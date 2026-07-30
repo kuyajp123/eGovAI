@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import EBuddyMascot from '../components/EBuddyMascot'
 
 const Dashboard = () => {
   return (
@@ -35,9 +36,9 @@ const Dashboard = () => {
     <span className="text-[10px] opacity-80">Donate & Track</span>
   </Link>
   <Link to="/home" className="group p-md rounded-2xl bg-surface-container border border-outline-variant flex flex-col items-center text-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all">
-    <span className="material-symbols-outlined text-3xl text-primary" style={{fontVariationSettings:"'FILL' 1"}}>smart_toy</span>
-    <span className="text-xs font-bold text-on-surface">AI Assistant</span>
-    <span className="text-[10px] text-on-surface-variant">Ask GovBot</span>
+    <EBuddyMascot alt="" className="w-10 h-10" />
+    <span className="text-xs font-bold text-on-surface">eBuddy</span>
+    <span className="text-[10px] text-on-surface-variant">Ask your AI guide</span>
   </Link>
 </div>
 </section>
@@ -133,11 +134,11 @@ const Dashboard = () => {
 <div className="mt-xl grid grid-cols-1 md:grid-cols-3 gap-md">
 <div className="md:col-span-2 p-lg rounded-2xl bg-surface-container-lowest shadow-sm border border-outline-variant flex flex-col justify-center min-h-[160px]">
 <div className="flex items-center gap-3 mb-sm">
-<div className="bg-gradient-to-tr from-primary to-secondary w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg">
-<span className="material-symbols-outlined" data-icon="smart_toy">smart_toy</span>
+<div className="bg-white border border-primary/20 w-10 h-10 rounded-full flex items-center justify-center shadow-lg overflow-hidden">
+<EBuddyMascot alt="" className="w-full h-full p-0.5" />
 </div>
 <div>
-<h5 className="font-label-lg text-on-surface">Need help with an application?</h5>
+<h5 className="font-label-lg text-on-surface">Need help? Ask eBuddy.</h5>
 <p className="font-body-md text-label-sm text-on-surface-variant">Ask me about missing documents or processing times.</p>
 </div>
 </div>

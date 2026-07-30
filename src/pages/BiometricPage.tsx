@@ -1,3 +1,5 @@
+import EBuddyMascot from '../components/EBuddyMascot'
+
 const BiometricPage = () => {
   return (
     <>
@@ -55,11 +57,11 @@ const BiometricPage = () => {
 </div>
 {/* AI Interaction Component (Floating Style) */}
 <div className="w-full bg-white rounded-xl p-4 shadow-sm border border-surface-variant flex items-center gap-4 transition-all hover:shadow-md">
-<div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary to-secondary flex items-center justify-center text-white shrink-0">
-<span className="material-symbols-outlined text-xl" data-icon="auto_awesome">auto_awesome</span>
+<div className="w-10 h-10 rounded-full bg-white border border-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
+<EBuddyMascot alt="" className="w-full h-full p-0.5" />
 </div>
 <div className="flex-grow">
-<p className="font-label-sm text-label-sm text-primary mb-0.5">GovAssistant AI</p>
+<p className="font-label-sm text-label-sm text-primary mb-0.5">eBuddy</p>
 <p className="font-body-md text-body-md text-on-surface leading-tight">I'm verifying your identity against official records. Please hold still for 3 seconds.</p>
 </div>
 </div>

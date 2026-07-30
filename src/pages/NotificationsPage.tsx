@@ -1,3 +1,5 @@
+import EBuddyMascot from '../components/EBuddyMascot'
+
 const NotificationsPage = () => {
   return (
     <>
@@ -18,12 +20,12 @@ const NotificationsPage = () => {
 <div className="space-y-sm">
 {/* AI Reminder */}
 <div className="bg-surface-container-lowest rounded-xl shadow-sm ai-accent-border p-md flex gap-md notification-card transition-colors cursor-pointer group">
-<div className="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center flex-shrink-0">
-<span className="material-symbols-outlined text-on-secondary-container" data-icon="smart_toy">smart_toy</span>
+<div className="w-12 h-12 rounded-full bg-white border border-primary/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
+<EBuddyMascot alt="" className="w-full h-full p-0.5" />
 </div>
 <div className="flex-grow">
 <div className="flex justify-between items-start">
-<h4 className="font-label-lg text-label-lg text-on-surface">AI Reminder: Complete your permit renewal</h4>
+<h4 className="font-label-lg text-label-lg text-on-surface">eBuddy Reminder: Complete your permit renewal</h4>
 <span className="font-label-sm text-label-sm text-on-surface-variant">2h ago</span>
 </div>
 <p className="font-body-md text-body-md text-on-surface-variant mt-xs">Your residential parking permit expires in 5 days. I've prepared the application for you.</p>

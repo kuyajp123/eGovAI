@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import EGovSignInButton from '../components/EGovSignInButton'
+import EBuddyMascot from '../components/EBuddyMascot'
 import { useEffect } from 'react'
 
 const WelcomePage = () => {
@@ -24,7 +25,7 @@ const WelcomePage = () => {
             </span>
             <span className="font-label-sm text-label-sm text-tertiary">Official Citizen Portal</span>
           </div>
-          <h2 className="text-[40px] font-bold text-on-surface leading-tight">Your Government Assistant</h2>
+          <h2 className="text-[40px] font-bold text-on-surface leading-tight">Meet eBuddy, Your Government Assistant</h2>
           <p className="text-lg text-on-surface-variant max-w-xl mx-auto md:mx-0">
             Find, prepare, pay, submit, and track government services in one place. Experience a frictionless bridge between citizens and administrative processes.
           </p>
@@ -41,11 +42,10 @@ const WelcomePage = () => {
           </p>
         </div>
         <div className="flex-1 w-full relative">
-          <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden shadow-2xl">
-            <img 
-              className="w-full h-full object-cover" 
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBzIrQS3nUJCbmoAhCm8544q5MrfkNF3f50aR384Phw9BbO4YYUu-zDaqKA3BhNZ03kdsr-PYgrdZNIjb4EfF0LYzHTdj5wZBNFSOyW-JyYbGUmVLlREoEwpGjoKrbwwgru7BDup_ngBatb_n-ePvz7ied6vpKsp3Z3x5eg-m1JcLREFY2zdYRhcPpAfuj2LO1EUduzxsU81i51_u7lwbvV0KaKWxUWLpOQhl6h5yud-uGm7yJ3qHayMAg0zx5QXzp-14rVBSsh5B4" 
-              alt="Government services illustration"
+          <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden shadow-2xl bg-gradient-to-br from-blue-50 via-white to-amber-50">
+            <EBuddyMascot
+              className="w-full h-full p-6 md:p-8"
+              alt="eBuddy, the eGovPH AI assistant mascot"
             />
             {/* Decorative Floating Element 1: Verification Badge */}
             <div className="absolute top-6 right-6 glass-effect p-4 rounded-xl shadow-lg flex items-center gap-3 animate-bounce shadow-primary/10" style={{ animationDuration: '4s' }}>
@@ -132,7 +132,7 @@ const WelcomePage = () => {
             <span className="text-[14px] font-semibold">Inclusive Design</span>
           </div>
         </div>
-        <p className="text-[12px] font-medium text-on-surface-variant text-center md:text-right">© 2024 GovAssistant. Official Government Agency Project.</p>
+        <p className="text-[12px] font-medium text-on-surface-variant text-center md:text-right">© 2026 eBuddy. Official Government Agency Prototype.</p>
       </section>
     </div>
   )

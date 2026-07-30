@@ -13,6 +13,7 @@ import {
   BusinessPermitSubmissionCard,
 } from '../components/BusinessPermitAgentCards';
 import { TourismDestinationPickerCard, TourismResultCard } from '../components/TourismResultCard';
+import EBuddyMascot from '../components/EBuddyMascot';
 import {
   DonationHistoryCard,
   DonationPaymentCard,
@@ -1407,7 +1408,7 @@ const AIChatHome = () => {
         setMessages(prev => [...prev, assistantMessage]);
       }
     } catch (err) {
-      setError('Unable to fetch response from eGovPH AI assistant. Please try again.');
+      setError('Unable to fetch a response from eBuddy. Please try again.');
       console.error('AI Chat error:', err);
     } finally {
       setIsLoading(false);
@@ -1932,16 +1933,11 @@ const AIChatHome = () => {
         {messages.length === 0 ? (
           /* Landing / Hero Screen */
           <div className="flex-grow flex flex-col justify-center items-center text-center my-auto py-6 space-y-8 animate-fadeIn">
-            {/* AI Assistant Core Badge */}
+            {/* eBuddy Core Badge */}
             <div className="relative group cursor-pointer" onClick={() => inputRef.current?.focus()}>
-              <div className="w-24 h-24 md:w-28 md:h-28 rounded-full bg-gradient-to-tr from-primary via-surface-tint to-secondary p-1 shadow-xl hover:scale-105 transition-all duration-300">
+              <div className="w-28 h-28 md:w-36 md:h-36 rounded-full bg-gradient-to-tr from-primary via-surface-tint to-secondary p-1 shadow-xl hover:scale-105 transition-all duration-300">
                 <div className="w-full h-full rounded-full bg-white flex items-center justify-center overflow-hidden shadow-inner">
-                  <span
-                    className="material-symbols-outlined text-5xl md:text-6xl text-primary animate-pulse"
-                    style={{ fontVariationSettings: "'FILL' 1" }}
-                  >
-                    smart_toy
-                  </span>
+                  <EBuddyMascot className="w-full h-full p-1" />
                 </div>
               </div>
               <div className="absolute bottom-0 right-0 bg-tertiary text-on-tertiary p-1.5 rounded-full shadow-lg border-2 border-white flex items-center justify-center">
@@ -1959,7 +1955,7 @@ const AIChatHome = () => {
                     Magandang araw, <span className="text-primary">{user.firstName}</span>!
                   </>
                 ) : (
-                  'Welcome to eGovPH Assistant'
+                  'Welcome! I am eBuddy'
                 )}
               </h2>
               <p className="text-on-surface-variant text-base md:text-lg">
@@ -2063,18 +2059,13 @@ const AIChatHome = () => {
             <div className="sticky top-20 z-30 bg-white/90 backdrop-blur-md px-5 py-3 rounded-2xl shadow-sm border border-outline-variant/30 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-secondary p-0.5 shadow-sm">
-                  <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
-                    <span
-                      className="material-symbols-outlined text-primary text-lg"
-                      style={{ fontVariationSettings: "'FILL' 1" }}
-                    >
-                      smart_toy
-                    </span>
+                  <div className="w-full h-full rounded-full bg-white flex items-center justify-center overflow-hidden">
+                    <EBuddyMascot alt="" className="w-full h-full p-0.5" />
                   </div>
                 </div>
                 <div>
                   <h3 className="font-bold text-on-surface text-sm flex items-center gap-1.5">
-                    eGovPH AI Assistant
+                    eBuddy
                     <span className="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
                   </h3>
                   <p className="text-xs text-on-surface-variant">
@@ -2099,10 +2090,8 @@ const AIChatHome = () => {
                   className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}
                 >
                   {message.role === 'assistant' && (
-                    <div className="w-9 h-9 rounded-full bg-primary-container text-primary flex items-center justify-center shrink-0 shadow-sm border border-primary/20">
-                      <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                        smart_toy
-                      </span>
+                    <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm border border-primary/20 overflow-hidden">
+                      <EBuddyMascot alt="" className="w-full h-full p-0.5" />
                     </div>
                   )}
 
@@ -3588,14 +3577,12 @@ const AIChatHome = () => {
               {/* Thinking / Loading State */}
               {isLoading && (
                 <div className="flex gap-3 justify-start items-center animate-pulse">
-                  <div className="w-9 h-9 rounded-full bg-primary-container text-primary flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                      smart_toy
-                    </span>
+                  <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center shrink-0 border border-primary/20 overflow-hidden">
+                    <EBuddyMascot alt="" className="w-full h-full p-0.5" />
                   </div>
                   <div className="bg-white border border-outline-variant/30 rounded-2xl rounded-bl-none px-5 py-4 shadow-sm flex items-center gap-2">
                     <span className="text-xs text-on-surface-variant font-medium">
-                      eGovPH AI is searching government databases
+                      eBuddy is searching government databases
                     </span>
                     <div className="flex gap-1">
                       <span
@@ -3761,7 +3748,7 @@ const AIChatHome = () => {
           </div>
 
           <p className="text-[11px] text-center text-on-surface-variant/70 mt-1.5 font-medium">
-            eGovPH AI Assistant provides official informational guidance for Philippine government services.
+            eBuddy provides official informational guidance for Philippine government services.
           </p>
         </div>
       </div>

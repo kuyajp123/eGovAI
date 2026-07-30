@@ -112,7 +112,7 @@ const LawsPage = () => {
           className="flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-primary transition-colors"
         >
           <span className="material-symbols-outlined text-base">arrow_back</span>
-          Back to AI Assistant
+          Back to eBuddy
         </button>
 
         <div className="flex items-start gap-4">

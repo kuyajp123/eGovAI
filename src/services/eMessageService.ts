@@ -66,7 +66,7 @@ export const sendVerificationConfirmation = (mobile: string, name: string) =>
     message:
       `[eGovPH] Magandang araw, ${name}! ` +
       `Your identity has been successfully verified via PhilSys NIDAS. ` +
-      `You may now proceed with your government service transaction. — GovAssistant`,
+      `You may now proceed with your government service transaction. — eBuddy`,
   })
 
 /** Sent after a successful eGovPay payment */
@@ -82,7 +82,7 @@ export const sendPaymentConfirmation = (
       `[eGovPH] Payment Confirmed! Hi ${name}, ` +
       `your payment of PHP ${amount.toLocaleString()} has been received. ` +
       `Reference No: ${reference}. ` +
-      `Please keep this reference number for your records. — GovAssistant`,
+      `Please keep this reference number for your records. — eBuddy`,
   })
 
 /** Sent after a business permit / tax application is submitted */
@@ -97,7 +97,7 @@ export const sendApplicationConfirmation = (
     message:
       `[eGovPH] Application Submitted! Hi ${name}, ` +
       `your ${service} application has been filed and is now being processed. ` +
-      `Tracking ID: ${trackingId}. — GovAssistant`,
+      `Tracking ID: ${trackingId}. — eBuddy`,
   })
 
 // ── Helpers ────────────────────────────────────────────────

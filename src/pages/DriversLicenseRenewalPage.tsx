@@ -9,6 +9,7 @@ import {
   sendPaymentConfirmation,
   sendApplicationConfirmation,
 } from '../services/eMessageService'
+import EBuddyMascot from '../components/EBuddyMascot'
 
 type WizardStep = 'info' | 'verify' | 'details' | 'payment' | 'success'
 
@@ -219,9 +220,11 @@ const DriversLicenseRenewalPage = () => {
         <div className="space-y-5">
           {/* AI Summary banner */}
           <div className="p-4 rounded-2xl bg-gradient-to-r from-secondary/10 to-primary/5 border border-secondary/20 flex items-start gap-3">
-            <span className="material-symbols-outlined text-secondary text-2xl mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+            <div className="w-10 h-10 rounded-full bg-white border border-secondary/20 shrink-0 overflow-hidden">
+              <EBuddyMascot alt="" className="w-full h-full p-0.5" />
+            </div>
             <div className="text-sm text-on-surface-variant space-y-1">
-              <p className="font-bold text-on-surface text-sm">What the AI found for you</p>
+              <p className="font-bold text-on-surface text-sm">What eBuddy found for you</p>
               <p>Driver's licenses are now valid for <strong>10 years</strong> (no violations) or <strong>5 years</strong> (with violations). You can renew up to <strong>60 days before expiry</strong>.</p>
             </div>
           </div>

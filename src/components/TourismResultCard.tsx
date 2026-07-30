@@ -95,7 +95,7 @@ export const TourismResultCard = ({ result, onFollowUp }: TourismResultCardProps
         <div className="flex items-center gap-2 text-white">
           <span className="material-symbols-outlined text-xl">travel_explore</span>
           <div>
-            <p className="text-xs font-bold leading-none">eGovPH Tourism Assistant</p>
+            <p className="text-xs font-bold leading-none">eBuddy Tourism Guide</p>
             <p className="text-[9px] opacity-80 mt-1">Philippine travel planning</p>
           </div>
         </div>

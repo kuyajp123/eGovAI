@@ -227,7 +227,7 @@ export const processAiBusinessIntent = (
         `**Estimated Renewal/Payment:** ₱${estimatedTotal.toLocaleString()} PHP\n\n` +
         `Click below to check your status and proceed with payment if outstanding fees are found.`
       : `I have identified your request for **${title}** with ${agency}.\n\n` +
-        `Here is the automated summary prepared by eGovPH AI:\n` +
+        `Here is the automated summary prepared by eBuddy:\n` +
         `• **Applicant:** ${applicantName}\n` +
         `• **Location:** ${applicantLocation}\n` +
         `• **Estimated Total Fees:** ₱${estimatedTotal.toLocaleString()} PHP\n` +

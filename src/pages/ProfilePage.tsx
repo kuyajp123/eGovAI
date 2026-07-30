@@ -179,7 +179,7 @@ const ProfilePage = () => {
         number: updatedUser.mobileNumber,
         message:
           `[eGovPH Alert] Your citizen profile has been updated and verified via Face Liveness. ` +
-          `Score: ${result.confidenceScore.toFixed(1)}/100. Ref: ${result.token.slice(0, 8)}. — GovAssistant`,
+          `Score: ${result.confidenceScore.toFixed(1)}/100. Ref: ${result.token.slice(0, 8)}. — eBuddy`,
       })
     }
 

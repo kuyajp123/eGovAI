@@ -1,3 +1,5 @@
+import EBuddyMascot from '../components/EBuddyMascot'
+
 const DocumentUpload = () => {
   return (
     <>
@@ -9,8 +11,8 @@ const DocumentUpload = () => {
 </section>
 {/* AI Assistant Feedback Bubble */}
 <div className="flex gap-sm items-end ai-pulse">
-<div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center shrink-0 shadow-sm border border-secondary">
-<span className="material-symbols-outlined text-on-secondary-container" style={{fontVariationSettings: "'FILL' 1",}}>smart_toy</span>
+<div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm border border-secondary overflow-hidden">
+<EBuddyMascot alt="" className="w-full h-full p-0.5" />
 </div>
 <div className="agent-bubble bg-surface-container-lowest custom-card-shadow p-lg rounded-xl rounded-bl-none max-w-[85%]">
 <p className="font-body-md text-on-surface">Please upload your 2023 DTI Registration. I'll scan it immediately.</p>

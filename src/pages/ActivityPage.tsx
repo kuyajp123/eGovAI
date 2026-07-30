@@ -159,7 +159,7 @@ const ActivityPage = () => {
 <p className="text-body-md font-body-md text-on-surface-variant mb-md">Our AI can help you prepare missing paperwork.</p>
 <button className="bg-gradient-to-r from-primary to-secondary text-on-primary px-xl py-3 rounded-full font-label-lg shadow-lg hover:shadow-xl transition-all active:scale-95 flex items-center gap-md">
 <span className="material-symbols-outlined" data-icon="auto_awesome">auto_awesome</span>
-                Ask GovAssistant AI
+                Ask eBuddy
             </button>
 </section>
 </main>
