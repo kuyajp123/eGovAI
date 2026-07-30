@@ -32,6 +32,17 @@ interface ServiceConfig {
   bgColor: string
 }
 
+interface DedicatedModuleConfig {
+  id: string
+  path: string
+  icon: string
+  title: string
+  subtitle: string
+  detail: string
+  color: string
+  bgColor: string
+}
+
 const SERVICES: ServiceConfig[] = [
   {
     id: 'business_new',
@@ -82,6 +93,19 @@ const SERVICES: ServiceConfig[] = [
     feeType: 'professional',
     color: 'text-secondary',
     bgColor: 'bg-secondary-container/20',
+  },
+]
+
+const DEDICATED_MODULES: DedicatedModuleConfig[] = [
+  {
+    id: 'donations',
+    path: '/donations',
+    icon: 'volunteer_activism',
+    title: 'Donations & Giving',
+    subtitle: 'Donate through eGovPay and track where your contribution was directed',
+    detail: 'Recipient-specific settlements · Blockchain-style local ledger',
+    color: 'text-fuchsia-700',
+    bgColor: 'bg-fuchsia-100',
   },
 ]
 
@@ -287,13 +311,13 @@ const BusinessServicesPage = () => {
       <div className="mb-8 text-center space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-xs font-bold">
           <span className="material-symbols-outlined text-base">account_balance</span>
-          eGovPH Business & Tax Services
+          eGovPH Digital Services
         </div>
         <h1 className="text-2xl md:text-3xl font-bold text-on-surface">
-          Business Permits & Tax Payments
+          Government Services & Secure Payments
         </h1>
         <p className="text-sm text-on-surface-variant max-w-lg mx-auto">
-          Verified, secure government transactions — powered by eVerify, eGovPay, and eMessage.
+          Access permits, taxes, donations, and other government-connected services in one place.
         </p>
       </div>
 
@@ -353,6 +377,47 @@ const BusinessServicesPage = () => {
               </span>
             </button>
           ))}
+
+          <div className="pt-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-on-surface">Dedicated modules</h2>
+                <p className="text-xs text-on-surface-variant mt-0.5">
+                  Open a complete service workspace with its own flow and history.
+                </p>
+              </div>
+              <span className="shrink-0 px-2.5 py-1 rounded-full bg-fuchsia-100 text-fuchsia-700 text-[10px] font-bold uppercase tracking-wide">
+                New
+              </span>
+            </div>
+
+            {DEDICATED_MODULES.map(module => (
+              <button
+                key={module.id}
+                onClick={() => navigate(module.path)}
+                className="w-full p-5 rounded-2xl bg-gradient-to-r from-fuchsia-50 to-purple-50 border border-fuchsia-200 hover:border-fuchsia-400 hover:shadow-md shadow-sm text-left flex items-center gap-4 group transition-all"
+              >
+                <div className={`w-12 h-12 rounded-xl ${module.bgColor} ${module.color} flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
+                  <span className="material-symbols-outlined text-2xl">{module.icon}</span>
+                </div>
+                <div className="flex-grow min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-on-surface group-hover:text-fuchsia-700 transition-colors">
+                      {module.title}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full bg-white/80 border border-fuchsia-200 text-fuchsia-700 text-[10px] font-bold">
+                      Open module
+                    </span>
+                  </div>
+                  <p className="text-xs text-on-surface-variant mt-0.5">{module.subtitle}</p>
+                  <p className="text-[11px] text-outline mt-1">{module.detail}</p>
+                </div>
+                <span className="material-symbols-outlined text-fuchsia-500 group-hover:text-fuchsia-700 group-hover:translate-x-1 transition-all">
+                  chevron_right
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

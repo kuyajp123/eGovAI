@@ -13,6 +13,12 @@ import {
   BusinessPermitSubmissionCard,
 } from '../components/BusinessPermitAgentCards';
 import { TourismDestinationPickerCard, TourismResultCard } from '../components/TourismResultCard';
+import {
+  DonationHistoryCard,
+  DonationPaymentCard,
+  DonationPromptCard,
+  DonationReviewCard,
+} from '../components/DonationAgentCards';
 import { useAuth } from '../context/AuthContext';
 import { AiBusinessAction, processAiBusinessIntent } from '../services/aiBusinessService';
 import { CtaAction, detectCtaAction } from '../services/aiCtaService';
@@ -96,6 +102,24 @@ import {
   shouldAskForTourismDestination,
   startTourismPlanner,
 } from '../services/aiTourismService';
+import {
+  DonationAgentPrompt,
+  DonationAgentState,
+  DonationAgentTurn,
+  buildDonationDraft,
+  continueDonationAgent,
+  isDonationAgentIntent,
+  isDonationTrackingIntent,
+  markDonationPaymentCreated,
+  processDonationTrackingIntent,
+  startDonationAgent,
+} from '../services/aiDonationAgentService';
+import {
+  DonationDraft,
+  DonationSummary,
+  recordDonationPaymentLink,
+  recordDonationPaymentStatus,
+} from '../services/donationService';
 
 interface Message {
   id: string;
@@ -118,6 +142,11 @@ interface Message {
   businessPermitPaymentIntent?: PaymentIntent;
   tourismPlannerPrompt?: TourismPlannerPrompt;
   tourismResult?: TourismResult;
+  donationAgentPrompt?: DonationAgentPrompt;
+  donationStateSnapshot?: DonationAgentState;
+  donationDraft?: DonationDraft;
+  donationPaymentIntent?: PaymentIntent;
+  donationHistory?: DonationSummary[];
   businessAction?: AiBusinessAction;
   identityCard?: IdentityCardData;
   ctaAction?: CtaAction;
@@ -167,6 +196,13 @@ const BUSINESS_PERMIT_AGENT_PLACEHOLDERS: Record<BusinessPermitAgentState['stage
 };
 
 const TOURISM_PLANNER_PLACEHOLDER = 'Type any Philippine destination...';
+
+const DONATION_AGENT_PLACEHOLDERS: Record<DonationAgentState['stage'], string> = {
+  campaign: 'Choose a configured donation campaign...',
+  amount: 'Enter a donation amount from ₱1 to ₱100,000...',
+  review: 'Edit the donation review card, or tell me what to change...',
+  payment: 'Open eGovPay or ask me to check the donation status...',
+};
 
 const isBusinessPermitRenewalCtaAction = (action?: CtaAction): boolean =>
   action?.actionType === 'business_permit_renewal';
@@ -237,6 +273,9 @@ const AIChatHome = () => {
   const [businessPermitDocumentError, setBusinessPermitDocumentError] = useState<string | null>(null);
   const [tourismPlanner, setTourismPlanner] = useState<TourismPlannerState | null>(null);
   const [activeTourismMessageId, setActiveTourismMessageId] = useState<string | null>(null);
+  const [donationAgent, setDonationAgent] = useState<DonationAgentState | null>(null);
+  const [activeDonationMessageId, setActiveDonationMessageId] = useState<string | null>(null);
+  const [isCreatingDonationPayment, setIsCreatingDonationPayment] = useState(false);
   const [checkingPaymentIds, setCheckingPaymentIds] = useState<string[]>([]);
   const checkingPaymentIdsRef = useRef(new Set<string>());
   const businessPermitOperationRequestRef = useRef(0);
@@ -250,6 +289,7 @@ const AIChatHome = () => {
     'How to request PSA Birth Certificate online?',
     'Where is the nearest Social Security office?',
     'Help me choose a travel destination',
+    'I want to donate to a community campaign',
   ];
 
   const featureCards = [
@@ -283,6 +323,12 @@ const AIChatHome = () => {
       desc: 'Philippine destinations, itineraries, budgets, and transport tips',
       query: 'Help me plan a trip',
     },
+    {
+      icon: 'volunteer_activism',
+      title: 'Donations & Giving',
+      desc: 'Donate through eGovPay and track your local ledger',
+      query: 'I want to make a donation',
+    },
   ];
 
   const quickPrompts = [
@@ -293,6 +339,7 @@ const AIChatHome = () => {
     'PhilHealth Membership',
     'TIN Application',
     'Choose a Travel Destination',
+    'Make a Donation',
   ];
 
   useEffect(() => {
@@ -326,15 +373,20 @@ const AIChatHome = () => {
     setMessages(prev => prev.map(message => {
       const sssPaymentIntent = updateIntent(message.sssPaymentIntent);
       const businessPermitPaymentIntent = updateIntent(message.businessPermitPaymentIntent);
+      const donationPaymentIntent = signal.status === 'paid' && signal.verificationSource !== 'egovpay_api'
+        ? message.donationPaymentIntent
+        : updateIntent(message.donationPaymentIntent);
       const paymentMatched =
         sssPaymentIntent !== message.sssPaymentIntent ||
-        businessPermitPaymentIntent !== message.businessPermitPaymentIntent;
+        businessPermitPaymentIntent !== message.businessPermitPaymentIntent ||
+        donationPaymentIntent !== message.donationPaymentIntent;
       if (!paymentMatched) return message;
 
       return {
         ...message,
         sssPaymentIntent,
         businessPermitPaymentIntent,
+        donationPaymentIntent,
         businessPermitApplication:
           signal.status === 'paid' && message.businessPermitApplication
             ? { ...message.businessPermitApplication, status: 'Payment Confirmed - Under Assessment' }
@@ -354,7 +406,13 @@ const AIChatHome = () => {
         }
       : prev
     );
-  }, []);
+    if (signal.status !== 'paid' || signal.verificationSource === 'egovpay_api') {
+      setDonationAgent(prev => prev?.stage === 'payment' ? { ...prev, paymentStatus: signal.status } : prev);
+    }
+    if (user?.id) void recordDonationPaymentStatus(user.id, paymentId, signal).catch(error => {
+      console.warn('Donation ledger could not apply the payment status:', error);
+    });
+  }, [user?.id]);
 
   const checkChatPaymentStatus = useCallback(async (paymentId: string) => {
     if (checkingPaymentIdsRef.current.has(paymentId)) return;
@@ -384,6 +442,7 @@ const AIChatHome = () => {
     messagesRef.current.forEach(message => {
       if (message.sssPaymentIntent?.status === 'pending') pendingIds.add(message.sssPaymentIntent.paymentId);
       if (message.businessPermitPaymentIntent?.status === 'pending') pendingIds.add(message.businessPermitPaymentIntent.paymentId);
+      if (message.donationPaymentIntent?.status === 'pending') pendingIds.add(message.donationPaymentIntent.paymentId);
     });
     pendingIds.forEach(paymentId => void checkChatPaymentStatus(paymentId));
   }, [checkChatPaymentStatus]);
@@ -518,6 +577,99 @@ const AIChatHome = () => {
       sessionId: turn.result?.sessionId,
     };
     setMessages(prev => [...prev, assistantMessage]);
+  };
+
+  const appendDonationAgentTurn = (turn: DonationAgentTurn) => {
+    setDonationAgent(turn.state);
+    const messageId = `${Date.now()}-donation-agent`;
+    setActiveDonationMessageId(turn.state && turn.prompt ? messageId : null);
+    setMessages(prev => [...prev, {
+      id: messageId,
+      role: 'assistant',
+      content: turn.reply,
+      timestamp: new Date(),
+      donationAgentPrompt: turn.prompt,
+      donationStateSnapshot: turn.state ? { ...turn.state } : undefined,
+      donationDraft: turn.draft,
+      donationPaymentIntent: turn.paymentIntent,
+    }]);
+  };
+
+  const appendDonationActionTurn = (userContent: string, turn: DonationAgentTurn) => {
+    const now = Date.now();
+    const assistantMessageId = `${now}-donation-action-assistant`;
+    setDonationAgent(turn.state);
+    setActiveDonationMessageId(turn.state && turn.prompt ? assistantMessageId : null);
+    setMessages(prev => [
+      ...prev,
+      { id: `${now}-donation-action-user`, role: 'user', content: userContent, timestamp: new Date() },
+      {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: turn.reply,
+        timestamp: new Date(),
+        donationAgentPrompt: turn.prompt,
+        donationStateSnapshot: turn.state ? { ...turn.state } : undefined,
+        donationDraft: turn.draft,
+        donationPaymentIntent: turn.paymentIntent,
+      },
+    ]);
+  };
+
+  const updateDonationReview = (updates: Partial<DonationAgentState>) => {
+    if (!donationAgent || donationAgent.stage !== 'review') return;
+    const updated = { ...donationAgent, ...updates };
+    setDonationAgent(updated);
+    setMessages(prev => prev.map(message => message.id === activeDonationMessageId
+      ? { ...message, donationStateSnapshot: { ...updated }, donationDraft: buildDonationDraft(updated) || undefined }
+      : message));
+  };
+
+  const isActiveDonationReview = (message: Message): boolean =>
+    message.id === activeDonationMessageId &&
+    donationAgent?.id === message.donationAgentPrompt?.conversationId &&
+    donationAgent?.stage === 'review';
+
+  const handleCreateDonationPayment = async () => {
+    if (!user || !donationAgent || donationAgent.stage !== 'review' || isCreatingDonationPayment) return;
+    const draft = buildDonationDraft(donationAgent);
+    if (!draft) {
+      appendDonationAgentTurn(continueDonationAgent(donationAgent, 'confirm'));
+      return;
+    }
+    setIsCreatingDonationPayment(true);
+    try {
+      const citizenName = [user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ');
+      const paymentIntent = await createPaymentIntent({
+        amount: draft.amount,
+        description: `Donation ${draft.donationId} — ${draft.campaign.title}`,
+        citizenName,
+        citizenEmail: user.email,
+        citizenMobile: user.mobileNumber,
+        settlementTemplateUuid: draft.campaign.settlementTemplateUuid,
+        context: {
+          kind: 'donation',
+          entityId: draft.donationId,
+          userId: user.id,
+          campaignId: draft.campaign.id,
+          campaignTitle: draft.campaign.title,
+          recipientName: draft.campaign.recipientName,
+          destination: draft.campaign.location,
+        },
+        items: [{ name: `Donation — ${draft.campaign.title}`, amount: draft.amount }],
+      });
+      await recordDonationPaymentLink(user.id, draft, paymentIntent);
+      appendDonationActionTurn('Create the eGovPay donation link', markDonationPaymentCreated(donationAgent, paymentIntent));
+    } catch (paymentError) {
+      setMessages(prev => [...prev, {
+        id: `${Date.now()}-donation-error`,
+        role: 'assistant',
+        content: `The donation checkout could not be created: ${paymentError instanceof Error ? paymentError.message : 'Unknown eGovPay error'}. Your review draft is still available and nothing was paid.`,
+        timestamp: new Date(),
+      }]);
+    } finally {
+      setIsCreatingDonationPayment(false);
+    }
   };
 
   const appendSSSAgentTurn = (turn: SSSAgentTurn) => {
@@ -996,7 +1148,8 @@ const AIChatHome = () => {
       isCreatingSSSPayment ||
       isVerifyingBusinessPermit ||
       isSubmittingBusinessPermit ||
-      isCreatingBusinessPermitPayment
+      isCreatingBusinessPermitPayment ||
+      isCreatingDonationPayment
     ) return;
 
     setError(null);
@@ -1065,12 +1218,33 @@ const AIChatHome = () => {
         return;
       }
 
+      if (donationAgent) {
+        appendDonationAgentTurn(continueDonationAgent(donationAgent, processText));
+        return;
+      }
+
       // A generic travel request becomes a guarded destination-selection turn.
       // Only a validated destination is sent to the dedicated Tourism endpoint.
       if (tourismPlanner) {
         const turn = await continueTourismPlanner(tourismPlanner, processText);
         appendTourismPlannerTurn(turn);
         return;
+      }
+
+      // Donation history questions are answered only from this signed-in
+      // user's local ledger; the general AI never invents financial records.
+      if (user && isDonationTrackingIntent(processText)) {
+        const tracking = processDonationTrackingIntent(processText, user.id);
+        if (tracking.isTrackingIntent) {
+          setMessages(prev => [...prev, {
+            id: `${Date.now()}-donation-history`,
+            role: 'assistant',
+            content: tracking.content || 'No donation records were found in this browser.',
+            timestamp: new Date(),
+            donationHistory: tracking.donations,
+          }]);
+          return;
+        }
       }
 
       // Broad help requests stay conversational until the citizen identifies a need.
@@ -1105,6 +1279,11 @@ const AIChatHome = () => {
       // go to the normal assistant below.
       if (isBusinessPermitRenewalIntent(processText)) {
         appendBusinessPermitAgentTurn(startBusinessPermitAgent(processText));
+        return;
+      }
+
+      if (isDonationAgentIntent(processText)) {
+        appendDonationAgentTurn(startDonationAgent(processText));
         return;
       }
 
@@ -1550,6 +1729,9 @@ const AIChatHome = () => {
     setBusinessPermitDocumentError(null);
     setTourismPlanner(null);
     setActiveTourismMessageId(null);
+    setDonationAgent(null);
+    setActiveDonationMessageId(null);
+    setIsCreatingDonationPayment(false);
     setCheckingPaymentIds([]);
     checkingPaymentIdsRef.current.clear();
     businessPermitOperationRequestRef.current += 1;
@@ -1862,6 +2044,8 @@ const AIChatHome = () => {
                     onClick={() => handleSuggestionClick(
                       prompt === 'Choose a Travel Destination'
                         ? 'Help me plan a trip'
+                        : prompt === 'Make a Donation'
+                          ? 'I want to make a donation'
                         : `How to apply or renew ${prompt}?`
                     )}
                     className="px-4 py-2 rounded-full bg-white hover:bg-primary-container/20 border border-outline-variant/40 hover:border-primary/40 text-on-surface-variant hover:text-primary text-xs font-medium transition-all shadow-sm active:scale-95"
@@ -2454,6 +2638,46 @@ const AIChatHome = () => {
                           onStartAnother={handleStartAnotherBusinessPermit}
                         />
                       )}
+
+                    {/* ACTIVE AGENTIC DONATION FLOW */}
+                    {message.donationAgentPrompt &&
+                      ['campaign', 'amount'].includes(message.donationAgentPrompt.stage) &&
+                      message.id === activeDonationMessageId &&
+                      donationAgent?.id === message.donationAgentPrompt.conversationId &&
+                      message.donationStateSnapshot && (
+                        <DonationPromptCard
+                          prompt={message.donationAgentPrompt}
+                          state={donationAgent}
+                          busy={isLoading || isCreatingDonationPayment}
+                          onReply={reply => handleSend(reply)}
+                          onCancel={() => handleSend('Cancel donation')}
+                        />
+                      )}
+
+                    {message.donationAgentPrompt?.stage === 'review' && message.donationStateSnapshot && (
+                      <DonationReviewCard
+                        state={isActiveDonationReview(message) && donationAgent ? donationAgent : message.donationStateSnapshot}
+                        active={isActiveDonationReview(message)}
+                        busy={isCreatingDonationPayment}
+                        onUpdate={updateDonationReview}
+                        onConfirm={handleCreateDonationPayment}
+                        onCancel={() => handleSend('Cancel donation')}
+                      />
+                    )}
+
+                    {message.donationPaymentIntent && message.donationDraft && (
+                      <DonationPaymentCard
+                        draft={message.donationDraft}
+                        paymentIntent={message.donationPaymentIntent}
+                        checking={checkingPaymentIds.includes(message.donationPaymentIntent.paymentId)}
+                        onRefreshStatus={() => void checkChatPaymentStatus(message.donationPaymentIntent!.paymentId)}
+                        onOpenDonations={() => navigate('/donations')}
+                      />
+                    )}
+
+                    {message.donationHistory && (
+                      <DonationHistoryCard donations={message.donationHistory} onOpen={() => navigate('/donations')} />
+                    )}
 
                     {/* ACTIVE TOURISM DESTINATION SELECTION */}
                     {message.tourismPlannerPrompt &&
@@ -3433,9 +3657,11 @@ const AIChatHome = () => {
                       ? SSS_AGENT_PLACEHOLDERS[sssAgent.stage]
                       : businessPermitAgent
                         ? BUSINESS_PERMIT_AGENT_PLACEHOLDERS[businessPermitAgent.stage]
-                        : tourismPlanner
-                          ? TOURISM_PLANNER_PLACEHOLDER
-                          : placeholders[placeholderIndex]
+                        : donationAgent
+                          ? DONATION_AGENT_PLACEHOLDERS[donationAgent.stage]
+                          : tourismPlanner
+                            ? TOURISM_PLANNER_PLACEHOLDER
+                            : placeholders[placeholderIndex]
                 }
                 type="text"
                 value={inputValue}
@@ -3451,7 +3677,8 @@ const AIChatHome = () => {
                   isCreatingSSSPayment ||
                   isVerifyingBusinessPermit ||
                   isSubmittingBusinessPermit ||
-                  isCreatingBusinessPermitPayment
+                  isCreatingBusinessPermitPayment ||
+                  isCreatingDonationPayment
                 }
               />
               {/* Translation hint — shows original Filipino text below input */}
@@ -3481,7 +3708,8 @@ const AIChatHome = () => {
                 isCreatingSSSPayment ||
                 isVerifyingBusinessPermit ||
                 isSubmittingBusinessPermit ||
-                isCreatingBusinessPermitPayment
+                isCreatingBusinessPermitPayment ||
+                isCreatingDonationPayment
               }
               className={`w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full transition-all duration-200 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
                 isListening
@@ -3517,6 +3745,7 @@ const AIChatHome = () => {
                 isVerifyingBusinessPermit ||
                 isSubmittingBusinessPermit ||
                 isCreatingBusinessPermitPayment ||
+                isCreatingDonationPayment ||
                 !inputValue.trim()
               }
               className="w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full bg-primary text-white shadow-md hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed shrink-0"

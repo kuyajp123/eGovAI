@@ -16,10 +16,24 @@ export interface PaymentIntentPayload {
   citizenEmail?: string
   citizenMobile?: string
   items?: Array<{ name: string; amount: number }>
+  /** Optional override used by recipient-specific payments such as donations. */
+  settlementTemplateUuid?: string
+  context?: PaymentTransactionContext
+}
+
+export interface PaymentTransactionContext {
+  kind: 'donation' | 'sss' | 'business_permit' | 'other'
+  entityId: string
+  userId: string
+  campaignId?: string
+  campaignTitle?: string
+  recipientName?: string
+  destination?: string
 }
 
 export interface PaymentIntent {
   paymentId: string
+  transactionId?: string
   referenceNumber: string
   amount: number
   description: string
@@ -30,6 +44,7 @@ export interface PaymentIntent {
   expiresAt: string
   paidAt?: string
   statusUpdatedAt?: string
+  context?: PaymentTransactionContext
 }
 
 export interface TransactionDetails {
@@ -52,9 +67,21 @@ export interface PaymentStatusSignal {
   amount: number
   paidAt?: string
   updatedAt: string
+  verificationSource: 'egovpay_api' | 'redirect_hint'
 }
 
 export const PAYMENT_STATUS_STORAGE_PREFIX = 'egov_payment_status:'
+export const PAYMENT_CONTEXT_STORAGE_PREFIX = 'egov_payment_context:'
+
+export interface CachedPaymentTransaction {
+  uuid: string
+  txnid: string
+  referenceNumber?: string
+  amount: number
+  description: string
+  createdAt: string
+  context?: PaymentTransactionContext
+}
 
 export const normalizePaymentStatus = (status?: string): PaymentIntent['status'] => {
   const normalized = (status || '').toUpperCase()
@@ -64,7 +91,10 @@ export const normalizePaymentStatus = (status?: string): PaymentIntent['status']
   return 'pending'
 }
 
-export const publishPaymentStatus = (details: TransactionDetails): PaymentStatusSignal => {
+export const publishPaymentStatus = (
+  details: TransactionDetails,
+  verificationSource: PaymentStatusSignal['verificationSource'] = 'egovpay_api'
+): PaymentStatusSignal => {
   const updatedAt = new Date().toISOString()
   const signal: PaymentStatusSignal = {
     paymentId: details.uuid,
@@ -75,6 +105,7 @@ export const publishPaymentStatus = (details: TransactionDetails): PaymentStatus
     amount: Number.parseFloat(details.amount || '0') || 0,
     paidAt: details.paid_at,
     updatedAt,
+    verificationSource,
   }
 
   try {
@@ -90,13 +121,52 @@ export const publishPaymentStatus = (details: TransactionDetails): PaymentStatus
   return signal
 }
 
+const cachePaymentTransaction = (transaction: CachedPaymentTransaction): void => {
+  try {
+    const identifiers = [transaction.uuid, transaction.txnid, transaction.referenceNumber].filter(Boolean) as string[]
+    identifiers.forEach(identifier => {
+      localStorage.setItem(`${PAYMENT_CONTEXT_STORAGE_PREFIX}${identifier}`, JSON.stringify(transaction))
+    })
+    localStorage.setItem('egov_latest_pending_transaction', JSON.stringify(transaction))
+  } catch (error) {
+    console.warn('Could not cache pending transaction:', error)
+  }
+}
+
+export const getCachedPaymentTransaction = (identifier?: string): CachedPaymentTransaction | null => {
+  try {
+    if (identifier) {
+      const keyed = localStorage.getItem(`${PAYMENT_CONTEXT_STORAGE_PREFIX}${identifier}`)
+      if (keyed) return JSON.parse(keyed) as CachedPaymentTransaction
+    }
+    const latest = localStorage.getItem('egov_latest_pending_transaction')
+    return latest ? JSON.parse(latest) as CachedPaymentTransaction : null
+  } catch {
+    return null
+  }
+}
+
+export const resolvePaymentSettlementTemplate = (
+  payload: Pick<PaymentIntentPayload, 'settlementTemplateUuid' | 'context'>,
+  defaultSettlementTemplateUuid: string = SETTLEMENT_UUID
+): string => {
+  const recipientSettlement = payload.settlementTemplateUuid?.trim()
+  if (payload.context?.kind === 'donation' && !recipientSettlement) {
+    throw new Error('This donation campaign does not have a configured eGovPay settlement template.')
+  }
+  return recipientSettlement || defaultSettlementTemplateUuid
+}
+
 export const getPublishedPaymentStatus = (paymentId: string): PaymentStatusSignal | null => {
   try {
     const raw = localStorage.getItem(`${PAYMENT_STATUS_STORAGE_PREFIX}${paymentId}`)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<PaymentStatusSignal>
     if (!parsed.paymentId || !parsed.status || !parsed.updatedAt) return null
-    return parsed as PaymentStatusSignal
+    return {
+      ...parsed,
+      verificationSource: parsed.verificationSource === 'egovpay_api' ? 'egovpay_api' : 'redirect_hint',
+    } as PaymentStatusSignal
   } catch {
     return null
   }
@@ -137,6 +207,7 @@ export const createPaymentIntent = async (
   if (!Number.isFinite(payload.amount) || payload.amount <= 0) {
     throw new Error('eGovPay requires a transaction amount greater than ₱0.00.')
   }
+  const settlementTemplateUuid = resolvePaymentSettlementTemplate(payload)
 
   const useMock = import.meta.env.VITE_USE_MOCK_SERVICES === 'true'
 
@@ -149,7 +220,7 @@ export const createPaymentIntent = async (
 
     const requestBody = {
       amount: payload.amount,
-      settlement_template_uuid: SETTLEMENT_UUID,
+      settlement_template_uuid: settlementTemplateUuid,
       currency: 'PHP',
       digest,
       txnid,
@@ -182,6 +253,7 @@ export const createPaymentIntent = async (
       const data = result.data || {}
       const intent: PaymentIntent = {
         paymentId: data.uuid || txnid,
+        transactionId: txnid,
         referenceNumber: data.channel?.refno || txnid,
         amount: payload.amount,
         description: payload.description,
@@ -189,20 +261,18 @@ export const createPaymentIntent = async (
         status: 'pending',
         createdAt: new Date().toISOString(),
         expiresAt: expiry.toISOString(),
+        context: payload.context,
       }
 
-      // Cache transaction details in localStorage for return lookup
-      try {
-        localStorage.setItem('egov_latest_pending_transaction', JSON.stringify({
-          uuid: data.uuid || txnid,
-          txnid,
-          amount: payload.amount,
-          description: payload.description,
-          createdAt: new Date().toISOString(),
-        }))
-      } catch (e) {
-        console.warn('Could not cache pending transaction:', e)
-      }
+      cachePaymentTransaction({
+        uuid: data.uuid || txnid,
+        txnid,
+        referenceNumber: data.channel?.refno || txnid,
+        amount: payload.amount,
+        description: payload.description,
+        createdAt: intent.createdAt,
+        context: payload.context,
+      })
 
       return intent
     }
@@ -216,8 +286,9 @@ export const createPaymentIntent = async (
   // Demo fallback mode when VITE_USE_MOCK_SERVICES is set to true
   await new Promise(r => setTimeout(r, 1200))
   const ref = generateRef()
-  return {
+  const intent: PaymentIntent = {
     paymentId: generatePaymentId(),
+    transactionId: ref,
     referenceNumber: ref,
     amount: payload.amount,
     description: payload.description,
@@ -225,7 +296,18 @@ export const createPaymentIntent = async (
     status: 'pending',
     createdAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    context: payload.context,
   }
+  cachePaymentTransaction({
+    uuid: intent.paymentId,
+    txnid: ref,
+    referenceNumber: ref,
+    amount: intent.amount,
+    description: intent.description,
+    createdAt: intent.createdAt,
+    context: payload.context,
+  })
+  return intent
 }
 
 /**

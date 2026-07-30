@@ -23,6 +23,7 @@ import DriversLicenseRenewalPage from './pages/DriversLicenseRenewalPage'
 import SSSServicesPage from './pages/SSSServicesPage'
 import LawsPage from './pages/LawsPage'
 import PaymentReturnPage from './pages/PaymentReturnPage'
+import DonationsPage from './pages/DonationsPage'
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
           <Route path="/services/lto/license-renewal" element={<ProtectedRoute><DriversLicenseRenewalPage /></ProtectedRoute>} />
           <Route path="/services/sss" element={<ProtectedRoute><SSSServicesPage /></ProtectedRoute>} />
           <Route path="/services/laws" element={<ProtectedRoute><LawsPage /></ProtectedRoute>} />
+          <Route path="/donations" element={<ProtectedRoute><DonationsPage /></ProtectedRoute>} />
           <Route path="/payment-return" element={<ProtectedRoute><PaymentReturnPage /></ProtectedRoute>} />
           <Route path="/payment-success" element={<ProtectedRoute><PaymentReturnPage /></ProtectedRoute>} />
           <Route path="/payment-callback" element={<ProtectedRoute><PaymentReturnPage /></ProtectedRoute>} />

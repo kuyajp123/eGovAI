@@ -8,7 +8,7 @@ const Dashboard = () => {
 {/* Quick Actions — Pay Taxes & Business Permit */}
 <section className="mb-xl">
 <h3 className="font-title-lg text-title-lg text-on-surface mb-md">Quick Services</h3>
-<div className="grid grid-cols-2 md:grid-cols-5 gap-md">
+<div className="grid grid-cols-2 md:grid-cols-6 gap-md">
   <Link to="/services" className="group p-md rounded-2xl bg-gradient-to-br from-primary to-secondary text-white flex flex-col items-center text-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
     <span className="material-symbols-outlined text-3xl" style={{fontVariationSettings:"'FILL' 1"}}>add_business</span>
     <span className="text-xs font-bold">Business Permit</span>
@@ -28,6 +28,11 @@ const Dashboard = () => {
     <span className="material-symbols-outlined text-3xl" style={{fontVariationSettings:"'FILL' 1"}}>campaign</span>
     <span className="text-xs font-bold">eReport</span>
     <span className="text-[10px] opacity-80">File a Report</span>
+  </Link>
+  <Link to="/donations" className="group p-md rounded-2xl bg-gradient-to-br from-fuchsia-700 to-purple-800 text-white flex flex-col items-center text-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
+    <span className="material-symbols-outlined text-3xl" style={{fontVariationSettings:"'FILL' 1"}}>volunteer_activism</span>
+    <span className="text-xs font-bold">Donations</span>
+    <span className="text-[10px] opacity-80">Donate & Track</span>
   </Link>
   <Link to="/home" className="group p-md rounded-2xl bg-surface-container border border-outline-variant flex flex-col items-center text-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all">
     <span className="material-symbols-outlined text-3xl text-primary" style={{fontVariationSettings:"'FILL' 1"}}>smart_toy</span>

@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getTransactionDetails, publishPaymentStatus, TransactionDetails } from '../services/eGovPayService'
+import { getCachedPaymentTransaction, getTransactionDetails, publishPaymentStatus, TransactionDetails } from '../services/eGovPayService'
 import { sendPaymentConfirmation } from '../services/eMessageService'
+import { recordDonationPaymentStatus } from '../services/donationService'
 
 const POLL_INTERVAL_MS = 3000   // check every 3 seconds
 const MAX_POLL_ATTEMPTS = 20    // give up after ~60 seconds
@@ -17,27 +18,25 @@ const PaymentReturnPage = () => {
   const [pollAttempts, setPollAttempts] = useState(0)
   const [isPolling, setIsPolling] = useState(true)
   const [smsSent, setSmsSent] = useState(false)
+  const [donationLedgerRecorded, setDonationLedgerRecorded] = useState(false)
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Helper to read cached transaction from localStorage
-  const getCachedTx = () => {
-    try {
-      const raw = localStorage.getItem('egov_latest_pending_transaction')
-      return raw ? JSON.parse(raw) : null
-    } catch {
-      return null
-    }
-  }
-
   // URL params from eGovPay redirect or localStorage
-  const cachedTx = getCachedTx()
+  const requestedIdentifier = searchParams.get('uuid') || searchParams.get('transaction_uuid') || searchParams.get('txnid') || undefined
+  const cachedTx = getCachedPaymentTransaction(requestedIdentifier)
   const uuid = searchParams.get('uuid') || searchParams.get('transaction_uuid') || cachedTx?.uuid || ''
   const txnid = searchParams.get('txnid') || cachedTx?.txnid || ''
   const urlStatus = (searchParams.get('status') || searchParams.get('payment_status') || '').toUpperCase()
+  const isDonation = cachedTx?.context?.kind === 'donation'
 
   const effectiveStatus = (details?.payment_status || urlStatus || '').toUpperCase()
-  const isPaid = effectiveStatus === 'PAID' || effectiveStatus === 'SUCCESS'
-  const isFailed = effectiveStatus === 'FAILED' || effectiveStatus === 'CANCELLED'
+  const apiStatus = (details?.payment_status || '').toUpperCase()
+  const isPaid = isDonation
+    ? apiStatus === 'PAID' || apiStatus === 'SUCCESS'
+    : effectiveStatus === 'PAID' || effectiveStatus === 'SUCCESS'
+  const isFailed = isDonation
+    ? apiStatus === 'FAILED' || apiStatus === 'CANCELLED'
+    : effectiveStatus === 'FAILED' || effectiveStatus === 'CANCELLED'
   const isResolved = isPaid || isFailed
   const isTimedOut = pollAttempts >= MAX_POLL_ATTEMPTS && !isResolved
 
@@ -66,7 +65,16 @@ const PaymentReturnPage = () => {
     try {
       const data = await getTransactionDetails(targetUuid)
       setDetails(data)
-      publishPaymentStatus(data)
+      const signal = publishPaymentStatus(data, 'egovpay_api')
+      if (cachedTx?.context?.kind === 'donation') {
+        try {
+          await recordDonationPaymentStatus(cachedTx.context.userId, cachedTx.uuid || data.uuid, signal)
+          setDonationLedgerRecorded(true)
+        } catch (ledgerError) {
+          console.warn('Donation was verified but its local ledger could not be updated:', ledgerError)
+          setError('Payment was verified, but the local donation ledger could not append its confirmation block. Open Donations to inspect the ledger integrity status.')
+        }
+      }
       const status = (data.payment_status || '').toUpperCase()
       const resolved = status === 'PAID' || status === 'SUCCESS' || status === 'FAILED' || status === 'CANCELLED'
 
@@ -85,12 +93,12 @@ const PaymentReturnPage = () => {
           uuid: targetUuid,
           refno: searchParams.get('refno') || targetUuid,
           txnid: txnid || targetUuid,
-          amount: searchParams.get('amount') || cachedTx?.amount || '0.00',
+          amount: searchParams.get('amount') || String(cachedTx?.amount || '0.00'),
           payment_status: urlStatus,
           currency: 'PHP',
         }
         setDetails(fallbackDetails)
-        publishPaymentStatus(fallbackDetails)
+        publishPaymentStatus(fallbackDetails, 'redirect_hint')
       }
     }
   }, [uuid, txnid, urlStatus, searchParams, cachedTx, sendSmsConfirmation])
@@ -247,16 +255,29 @@ const PaymentReturnPage = () => {
           </div>
 
           <div className="space-y-1">
-            <h2 className="text-xl font-bold text-on-surface">Payment Successful!</h2>
+            <h2 className="text-xl font-bold text-on-surface">{isDonation ? 'Donation Confirmed!' : 'Payment Successful!'}</h2>
             <p className="text-xs text-emerald-700 font-semibold">
-              Your transaction has been processed and verified by eGovPay.
+              {isDonation ? 'Your donation payment has been processed and verified by eGovPay.' : 'Your transaction has been processed and verified by eGovPay.'}
             </p>
             <p className="text-[11px] text-on-surface-variant max-w-sm mx-auto pt-1">
-              You may close this payment tab and return to the AI chat. The original payment card will update automatically.
+              {isDonation
+                ? donationLedgerRecorded
+                  ? 'The confirmation was appended to your local donation ledger. You may return to the Donations module or AI chat.'
+                  : 'The payment is verified. Open the Donations module to reconcile and inspect the local ledger.'
+                : 'You may close this payment tab and return to the AI chat. The original payment card will update automatically.'}
             </p>
           </div>
 
+          {isDonation && error && <p className="text-xs text-amber-900 p-3 rounded-xl bg-amber-50 border border-amber-200">{error}</p>}
+
           <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-left space-y-2.5 text-xs">
+            {isDonation && cachedTx?.context && (
+              <>
+                <div className="flex justify-between gap-3"><span className="text-on-surface-variant">Campaign</span><strong className="text-right">{cachedTx.context.campaignTitle}</strong></div>
+                <div className="flex justify-between gap-3"><span className="text-on-surface-variant">Recipient</span><strong className="text-right">{cachedTx.context.recipientName}</strong></div>
+                <div className="flex justify-between gap-3"><span className="text-on-surface-variant">Destination</span><span className="text-right">{cachedTx.context.destination}</span></div>
+              </>
+            )}
             <div className="flex justify-between items-center">
               <span className="text-emerald-900">Payment Status</span>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-bold text-[10px] uppercase">
@@ -299,10 +320,10 @@ const PaymentReturnPage = () => {
 
           <div className="flex gap-3 pt-2">
             <button
-              onClick={() => navigate('/services')}
+              onClick={() => navigate(isDonation ? '/donations' : '/services')}
               className="flex-1 py-3 rounded-xl border border-outline-variant text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
             >
-              Browse Services
+              {isDonation ? 'Donation Ledger' : 'Browse Services'}
             </button>
             <button
               onClick={() => navigate('/dashboard')}
