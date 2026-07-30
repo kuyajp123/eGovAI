@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { verifyIdentity, triggerEVerifyLivenessSDK, VerifyResult } from '../services/eVerifyService'
 import { createLivenessSession } from '../services/faceLivenessService'
@@ -90,9 +90,22 @@ const SERVICES: ServiceConfig[] = [
 const BusinessServicesPage = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
 
   const [step, setStep] = useState<WizardStep>('select')
   const [selectedService, setSelectedService] = useState<ServiceConfig | null>(null)
+
+  // Auto-select service from query param (e.g. ?service=business_renewal)
+  useEffect(() => {
+    const serviceParam = searchParams.get('service')
+    if (serviceParam) {
+      // business_check is a virtual type from the AI — treat it as business_renewal
+      const resolvedParam = serviceParam === 'business_check' ? 'business_renewal' : serviceParam
+      const svc = SERVICES.find(s => s.id === resolvedParam)
+      if (svc) handleSelectService(svc)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Step 2 — Verify
   const [verifying, setVerifying] = useState(false)

@@ -19,6 +19,7 @@ export type CtaActionType =
   | 'sss_services'
   | 'philhealth_registration'
   | 'tax_payment'
+  | 'financial_assistance'
   | 'civil_registration'
   | 'vehicle_registration'
   | 'generic_application'
@@ -48,6 +49,8 @@ export interface CtaAction {
   estimatedTime?: string
   /** Agency or service provider */
   agency?: string
+  /** Required documents / IDs the citizen must prepare */
+  requirements?: string[]
 }
 
 export interface AiCtaResult {
@@ -107,9 +110,11 @@ const SSS_KEYWORDS = [
 const PHILHEALTH_KEYWORDS = [
   'philhealth',
   'phil health',
-  'health insurance',
   'philhealth registration',
   'philhealth contribution',
+  'philhealth membership',
+  'health insurance registration',
+  'register for health insurance',
 ]
 
 const TAX_KEYWORDS = [
@@ -118,8 +123,35 @@ const TAX_KEYWORDS = [
   'real property tax',
   'cedula',
   'community tax',
-  'bir',
-  'tin',
+  'bir registration',
+  'bir payment',
+  'bir filing',
+  'pay bir',
+  'tin application',
+  'tin number',
+  'get tin',
+  'apply tin',
+]
+
+const FINANCIAL_ASSISTANCE_KEYWORDS = [
+  'financial assistance',
+  'scholarship application',
+  'student aid',
+  'ched scholarship',
+  'ched grant',
+  'stufap',
+  'tertiary education subsidy',
+  'tes subsidy',
+  'educational assistance',
+  'educational grant',
+  'dswd scholarship',
+  'lgu scholarship',
+  'study grant',
+  'tuition subsidy',
+  'student loan',
+  'student grant',
+  'school financial assistance',
+  'student financial',
 ]
 
 const CIVIL_REG_KEYWORDS = [
@@ -203,8 +235,29 @@ export const detectCtaAction = (
   // Detect specific action type
   let action: CtaAction | undefined
 
+  // Civil Registration (PSA) — checked FIRST: most common civil service query, keywords are unambiguous
+  if (containsAny(combinedText, CIVIL_REG_KEYWORDS)) {
+    action = {
+      actionType: 'civil_registration',
+      ctaLabel: 'Request PSA Document Online',
+      ctaDescription: 'Order your PSA certificate for home delivery',
+      icon: 'description',
+      colorTheme: 'secondary',
+      preFilled,
+      estimatedTime: '5-10 minutes',
+      agency: 'Philippine Statistics Authority (PSA)',
+      requirements: [
+        'Full name of the document owner',
+        'Date and place of birth / marriage / death',
+        'Parents\' complete names (for birth certificate)',
+        'Valid government-issued ID of the requester',
+        'Purpose of request',
+        'Delivery address',
+      ],
+    }
+  }
   // Business Permit
-  if (containsAny(combinedText, BUSINESS_KEYWORDS)) {
+  else if (containsAny(combinedText, BUSINESS_KEYWORDS)) {
     const isRenewal = combinedText.includes('renew')
     action = {
       actionType: isRenewal ? 'business_permit_renewal' : 'business_permit_new',
@@ -218,6 +271,21 @@ export const detectCtaAction = (
       targetRoute: '/services/business',
       estimatedTime: '10-15 minutes',
       agency: 'City/Municipal BPLO',
+      requirements: isRenewal
+        ? [
+            'Previous Business Permit (original)',
+            'Official Receipt of last payment',
+            'Barangay Business Clearance',
+            'DTI / SEC / CDA Registration',
+            'Latest ITR or Financial Statement',
+          ]
+        : [
+            'DTI / SEC / CDA Certificate of Registration',
+            'Barangay Business Clearance',
+            'Contract of Lease (if renting)',
+            'Community Tax Certificate (Cedula)',
+            'Valid government-issued ID',
+          ],
     }
   }
   // Driver's License
@@ -232,6 +300,13 @@ export const detectCtaAction = (
       targetRoute: '/services/lto/license-renewal',
       estimatedTime: '8-12 minutes',
       agency: 'Land Transportation Office (LTO)',
+      requirements: [
+        'Current / expired Driver\'s License',
+        'Medical Certificate (LTO-accredited clinic)',
+        'Accomplished Application Form (ADL)',
+        'Payment for renewal fee',
+        'PhilSys National ID or valid gov\'t ID',
+      ],
     }
   }
   // SSS Services
@@ -246,6 +321,11 @@ export const detectCtaAction = (
       targetRoute: '/services/sss',
       estimatedTime: '5 minutes',
       agency: 'Social Security System (SSS)',
+      requirements: [
+        'SSS Number (SS ID or UMID)',
+        'Valid government-issued ID',
+        'Payment method (GCash, online banking, payment center)',
+      ],
     }
   }
   // National ID
@@ -259,6 +339,12 @@ export const detectCtaAction = (
       preFilled,
       estimatedTime: '12-15 minutes',
       agency: 'PhilSys / PSA',
+      requirements: [
+        'PSA Birth Certificate (original)',
+        'Proof of Address (utility bill, barangay cert.)',
+        'One of: passport, UMID, SSS ID, PhilHealth ID, or school ID',
+        'Mobile number for OTP verification',
+      ],
     }
   }
   // Passport
@@ -272,6 +358,13 @@ export const detectCtaAction = (
       preFilled,
       estimatedTime: '15-20 minutes',
       agency: 'Department of Foreign Affairs (DFA)',
+      requirements: [
+        'PSA Birth Certificate (original + photocopy)',
+        'Valid government-issued ID (original + photocopy)',
+        'Accomplished DFA ePassport Application Form',
+        'Old passport (for renewal)',
+        'Marriage Certificate (if applicable)',
+      ],
     }
   }
   // SSS
@@ -285,6 +378,11 @@ export const detectCtaAction = (
       preFilled,
       estimatedTime: '5-10 minutes',
       agency: 'Social Security System (SSS)',
+      requirements: [
+        'SSS Number (SS ID or UMID)',
+        'Valid government-issued ID',
+        'Payment method (GCash, online banking, payment center)',
+      ],
     }
   }
   // PhilHealth
@@ -298,10 +396,39 @@ export const detectCtaAction = (
       preFilled,
       estimatedTime: '8-12 minutes',
       agency: 'Philippine Health Insurance Corporation',
+      requirements: [
+        'PSA Birth Certificate',
+        'Valid government-issued ID',
+        'PhilHealth Member Registration Form (PMRF)',
+        'Employer / self-employed documents (if applicable)',
+      ],
     }
   }
-  // Tax Payment
-  else if (containsAny(combinedText, TAX_KEYWORDS)) {
+  // Financial Assistance / Scholarship
+  else if (containsAny(combinedText, FINANCIAL_ASSISTANCE_KEYWORDS)) {
+    action = {
+      actionType: 'financial_assistance',
+      ctaLabel: 'Apply for Financial Assistance',
+      ctaDescription: 'Proceed with your verified eGovPH identity',
+      icon: 'school',
+      colorTheme: 'tertiary',
+      preFilled,
+      estimatedTime: '10-15 minutes',
+      agency: 'CHED / DSWD / Local Government Unit',
+      requirements: [
+        'PSA Birth Certificate',
+        'Certificate of Enrollment or Acceptance',
+        'Income Tax Return or Barangay Indigency Certificate',
+        'Valid government-issued ID',
+        'School Registration Form',
+      ],
+    }
+  }
+  // Tax Payment — only when financial assistance is NOT the topic
+  else if (
+    containsAny(combinedText, TAX_KEYWORDS) &&
+    !containsAny(combinedText, FINANCIAL_ASSISTANCE_KEYWORDS)
+  ) {
     action = {
       actionType: 'tax_payment',
       ctaLabel: 'Proceed to Tax Payment',
@@ -312,19 +439,12 @@ export const detectCtaAction = (
       targetRoute: '/services/business',
       estimatedTime: '5-8 minutes',
       agency: 'City Treasurer\'s Office / BIR',
-    }
-  }
-  // Civil Registration (PSA)
-  else if (containsAny(combinedText, CIVIL_REG_KEYWORDS)) {
-    action = {
-      actionType: 'civil_registration',
-      ctaLabel: 'Request PSA Document',
-      ctaDescription: 'Birth, marriage, or death certificate',
-      icon: 'description',
-      colorTheme: 'secondary',
-      preFilled,
-      estimatedTime: '5-10 minutes',
-      agency: 'Philippine Statistics Authority (PSA)',
+      requirements: [
+        'Tax Declaration or Real Property Tax Order of Payment',
+        'TIN (Tax Identification Number)',
+        'Valid government-issued ID',
+        'Previous Official Receipt (for renewal)',
+      ],
     }
   }
   // Vehicle Registration
@@ -338,6 +458,13 @@ export const detectCtaAction = (
       preFilled,
       estimatedTime: '10-15 minutes',
       agency: 'Land Transportation Office (LTO)',
+      requirements: [
+        'Official Receipt / Certificate of Registration (OR/CR)',
+        'PNP-HPG Motor Vehicle Clearance (for renewal)',
+        'MVIS Certificate of Emission Compliance',
+        'TPL Insurance (third-party liability)',
+        'Valid government-issued ID',
+      ],
     }
   }
   // Generic fallback for other actionable responses

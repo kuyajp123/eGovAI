@@ -62,6 +62,8 @@ const PASSPORT_KEYWORDS = [
   'my passport',
   'view passport',
   'show passport',
+  'show me my passport',
+  'open my passport',
 ]
 
 const NATIONAL_ID_KEYWORDS = [
@@ -79,6 +81,23 @@ const NATIONAL_ID_KEYWORDS = [
   'my philsys id',
   'show my national id',
   'view my national id',
+  // Natural voice phrases
+  'show me my id',
+  'show my id',
+  'view my id',
+  'open my id',
+  'display my id',
+  'see my id',
+  'my id',
+  'my identification',
+  'show id',
+  'my card',
+  'show my card',
+  'show me my card',
+  'view my card',
+  'my government id',
+  'show my government id',
+  'show me my government id',
 ]
 
 const PROFILE_KEYWORDS = [
@@ -89,6 +108,14 @@ const PROFILE_KEYWORDS = [
   'my egov profile',
   'show my profile',
   'view my profile',
+  // Natural voice phrases
+  'show me my profile',
+  'open my profile',
+  'my information',
+  'show my information',
+  'show me my information',
+  'my personal details',
+  'show my personal details',
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

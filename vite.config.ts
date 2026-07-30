@@ -47,6 +47,13 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/face-liveness-api/, ''),
         secure: true,
       },
+      // DBM Transparency (Compass API) — SAAODB, NCA, SARO, LGSF records
+      '/compass-api': {
+        target: 'https://dbm-ws.oueg.info',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/compass-api/, ''),
+        secure: true,
+      },
     },
   },
 })

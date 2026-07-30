@@ -21,6 +21,7 @@ import EReportPage from './pages/EReportPage'
 import BusinessServicesPage from './pages/BusinessServicesPage'
 import DriversLicenseRenewalPage from './pages/DriversLicenseRenewalPage'
 import SSSServicesPage from './pages/SSSServicesPage'
+import LawsPage from './pages/LawsPage'
 import PaymentReturnPage from './pages/PaymentReturnPage'
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
           <Route path="/services/business" element={<ProtectedRoute><BusinessServicesPage /></ProtectedRoute>} />
           <Route path="/services/lto/license-renewal" element={<ProtectedRoute><DriversLicenseRenewalPage /></ProtectedRoute>} />
           <Route path="/services/sss" element={<ProtectedRoute><SSSServicesPage /></ProtectedRoute>} />
+          <Route path="/services/laws" element={<ProtectedRoute><LawsPage /></ProtectedRoute>} />
           <Route path="/payment-return" element={<ProtectedRoute><PaymentReturnPage /></ProtectedRoute>} />
           <Route path="/payment-success" element={<ProtectedRoute><PaymentReturnPage /></ProtectedRoute>} />
           <Route path="/payment-callback" element={<ProtectedRoute><PaymentReturnPage /></ProtectedRoute>} />

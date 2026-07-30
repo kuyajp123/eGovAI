@@ -510,6 +510,38 @@ export const extractDocumentData = async (file: File): Promise<DocumentExtractor
   }
 };
 
+interface SpeechMakerResponse {
+  data: string;
+  session_id: string;
+}
+
+/**
+ * Speech Maker - Generate a speech from a prompt
+ */
+export const generateSpeech = async (prompt: string, category: string = 'PH'): Promise<SpeechMakerResponse> => {
+  try {
+    const token = await getAccessToken();
+
+    const response = await fetch(`${INTEGRATION_BASE_URL}/api/v1/egov/integration/speech_maker/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ prompt, category }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Speech Maker API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Speech maker error:', error);
+    throw error;
+  }
+};
+
 /**
  * Get API Credits Balance
  */
