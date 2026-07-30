@@ -261,9 +261,9 @@ export const detectCtaAction = (
     const isRenewal = combinedText.includes('renew')
     action = {
       actionType: isRenewal ? 'business_permit_renewal' : 'business_permit_new',
-      ctaLabel: isRenewal ? 'Renew Business Permit Now' : 'Apply for Business Permit',
+      ctaLabel: isRenewal ? 'Renew Business Permit in Chat' : 'Apply for Business Permit',
       ctaDescription: isRenewal
-        ? 'Continue with your verified eGovPH details'
+        ? 'Complete a guided, editable renewal before submission and payment'
         : 'Start application with pre-filled information',
       icon: 'storefront',
       colorTheme: 'primary',

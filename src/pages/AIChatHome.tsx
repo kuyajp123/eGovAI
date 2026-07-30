@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -6,13 +6,27 @@ import {
   SSSPaymentCard,
   SSSTransactionReviewCard,
 } from '../components/SSSAgentCards';
+import {
+  BusinessPermitPaymentCard,
+  BusinessPermitPromptCard,
+  BusinessPermitReviewCard,
+  BusinessPermitSubmissionCard,
+} from '../components/BusinessPermitAgentCards';
 import { useAuth } from '../context/AuthContext';
 import { AiBusinessAction, processAiBusinessIntent } from '../services/aiBusinessService';
 import { CtaAction, detectCtaAction } from '../services/aiCtaService';
 import { IdentityCardData, processAiIdentityIntent } from '../services/aiIdentityService';
 import { TransparencyResult, processTransparencyIntent } from '../services/aiTransparencyService';
 import { generateAIResponse, generateSpeech, translateText } from '../services/egovService';
-import { PaymentIntent, createPaymentIntent } from '../services/eGovPayService';
+import {
+  PAYMENT_STATUS_STORAGE_PREFIX,
+  PaymentIntent,
+  PaymentStatusSignal,
+  createPaymentIntent,
+  getPublishedPaymentStatus,
+  getTransactionDetails,
+  publishPaymentStatus,
+} from '../services/eGovPayService';
 import { sendVerificationConfirmation } from '../services/eMessageService';
 import { triggerEVerifyLivenessSDK, verifyIdentity } from '../services/eVerifyService';
 import {
@@ -47,6 +61,29 @@ import {
   markSSSPaymentCreated,
   startSSSAgent,
 } from '../services/aiSSSAgentService';
+import {
+  BusinessPermitAgentPrompt,
+  BusinessPermitAgentState,
+  BusinessPermitAgentTurn,
+  attachBusinessPermitDocument,
+  buildBusinessPermitRenewalDraft,
+  continueBusinessPermitAgent,
+  isBusinessPermitRenewalIntent,
+  markBusinessPermitIdentityVerified,
+  markBusinessPermitPaymentCreated,
+  markBusinessPermitSubmitted,
+  reopenBusinessPermitDocuments,
+  removeBusinessPermitDocument,
+  startBusinessPermitAgent,
+} from '../services/aiBusinessPermitAgentService';
+import {
+  BusinessPermitDocumentType,
+  BusinessPermitRenewalApplication,
+  BusinessPermitRenewalDraft,
+  submitBusinessPermitRenewal,
+  validateBusinessPermitDocument,
+} from '../services/businessPermitService';
+import { sendApplicationConfirmation } from '../services/eMessageService';
 
 interface Message {
   id: string;
@@ -62,6 +99,11 @@ interface Message {
   sssStateSnapshot?: SSSAgentState;
   sssDraft?: SSSTransactionDraft;
   sssPaymentIntent?: PaymentIntent;
+  businessPermitAgentPrompt?: BusinessPermitAgentPrompt;
+  businessPermitStateSnapshot?: BusinessPermitAgentState;
+  businessPermitDraft?: BusinessPermitRenewalDraft;
+  businessPermitApplication?: BusinessPermitRenewalApplication;
+  businessPermitPaymentIntent?: PaymentIntent;
   businessAction?: AiBusinessAction;
   identityCard?: IdentityCardData;
   ctaAction?: CtaAction;
@@ -89,11 +131,29 @@ const SSS_AGENT_PLACEHOLDERS: Record<SSSAgentState['stage'], string> = {
   period: 'Choose the contribution payment period...',
   prn: 'Enter your SSS PRN or loan account number...',
   review: 'Edit the SSS review card, or tell me what to change...',
-  payment: 'Open the eGovPay link above, or cancel the SSS agent...',
+  payment: 'Payment status and next actions are shown above...',
 };
 
 const isSSSCtaAction = (action?: CtaAction): boolean =>
   action?.actionType === 'sss_services' || action?.actionType === 'sss_contribution';
+
+const BUSINESS_PERMIT_AGENT_PLACEHOLDERS: Record<BusinessPermitAgentState['stage'], string> = {
+  identity: 'Use Verify Identity to continue...',
+  permit_number: 'Enter the existing business permit number...',
+  business_name: 'Enter the registered business name...',
+  lgu: 'Enter the issuing city or municipality...',
+  business_address: 'Enter the complete business address...',
+  business_type: 'Choose the nature of business...',
+  tin: 'Enter the 9-digit or 12-digit TIN...',
+  renewal_year: 'Choose the permit renewal year...',
+  documents: 'Use the document upload controls above...',
+  review: 'Edit the permit review card, or tell me what to change...',
+  submitted: 'Use Create eGovPay Link above, or close the agent...',
+  payment: 'Payment status and next actions are shown above...',
+};
+
+const isBusinessPermitRenewalCtaAction = (action?: CtaAction): boolean =>
+  action?.actionType === 'business_permit_renewal';
 
 // ── Language detection helper ─────────────────────────────────────────────────
 // Detects Filipino/Tagalog and other non-English languages using common function
@@ -132,6 +192,7 @@ const AIChatHome = () => {
   const translateDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
+  const messagesRef = useRef<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -152,6 +213,15 @@ const AIChatHome = () => {
   const [isVerifyingSSS, setIsVerifyingSSS] = useState(false);
   const [isCreatingSSSPayment, setIsCreatingSSSPayment] = useState(false);
   const sssOperationRequestRef = useRef(0);
+  const [businessPermitAgent, setBusinessPermitAgent] = useState<BusinessPermitAgentState | null>(null);
+  const [activeBusinessPermitMessageId, setActiveBusinessPermitMessageId] = useState<string | null>(null);
+  const [isVerifyingBusinessPermit, setIsVerifyingBusinessPermit] = useState(false);
+  const [isSubmittingBusinessPermit, setIsSubmittingBusinessPermit] = useState(false);
+  const [isCreatingBusinessPermitPayment, setIsCreatingBusinessPermitPayment] = useState(false);
+  const [businessPermitDocumentError, setBusinessPermitDocumentError] = useState<string | null>(null);
+  const [checkingPaymentIds, setCheckingPaymentIds] = useState<string[]>([]);
+  const checkingPaymentIdsRef = useRef(new Set<string>());
+  const businessPermitOperationRequestRef = useRef(0);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
 
@@ -213,6 +283,117 @@ const AIChatHome = () => {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  const applyChatPaymentStatus = useCallback((paymentId: string, signal: PaymentStatusSignal) => {
+    const updateIntent = (intent?: PaymentIntent): PaymentIntent | undefined => {
+      if (!intent || intent.paymentId !== paymentId) return intent;
+      return {
+        ...intent,
+        status: signal.status,
+        referenceNumber: signal.referenceNumber || intent.referenceNumber,
+        amount: signal.amount > 0 ? signal.amount : intent.amount,
+        paidAt: signal.paidAt,
+        statusUpdatedAt: signal.updatedAt,
+      };
+    };
+
+    setMessages(prev => prev.map(message => {
+      const sssPaymentIntent = updateIntent(message.sssPaymentIntent);
+      const businessPermitPaymentIntent = updateIntent(message.businessPermitPaymentIntent);
+      const paymentMatched =
+        sssPaymentIntent !== message.sssPaymentIntent ||
+        businessPermitPaymentIntent !== message.businessPermitPaymentIntent;
+      if (!paymentMatched) return message;
+
+      return {
+        ...message,
+        sssPaymentIntent,
+        businessPermitPaymentIntent,
+        businessPermitApplication:
+          signal.status === 'paid' && message.businessPermitApplication
+            ? { ...message.businessPermitApplication, status: 'Payment Confirmed - Under Assessment' }
+            : message.businessPermitApplication,
+      };
+    }));
+
+    setSSSAgent(prev => prev?.stage === 'payment' ? { ...prev, paymentStatus: signal.status } : prev);
+    setBusinessPermitAgent(prev => prev?.stage === 'payment'
+      ? {
+          ...prev,
+          paymentStatus: signal.status,
+          submittedApplication:
+            signal.status === 'paid' && prev.submittedApplication
+              ? { ...prev.submittedApplication, status: 'Payment Confirmed - Under Assessment' }
+              : prev.submittedApplication,
+        }
+      : prev
+    );
+  }, []);
+
+  const checkChatPaymentStatus = useCallback(async (paymentId: string) => {
+    if (checkingPaymentIdsRef.current.has(paymentId)) return;
+    checkingPaymentIdsRef.current.add(paymentId);
+    setCheckingPaymentIds(prev => prev.includes(paymentId) ? prev : [...prev, paymentId]);
+    try {
+      const published = getPublishedPaymentStatus(paymentId);
+      if (published && published.status !== 'pending') {
+        applyChatPaymentStatus(paymentId, published);
+        return;
+      }
+
+      const details = await getTransactionDetails(paymentId);
+      const signal = publishPaymentStatus(details);
+      applyChatPaymentStatus(paymentId, signal);
+    } catch {
+      // The gateway can remain INITIAL briefly after checkout. Keep the card
+      // pending and let focus, storage, interval, or manual refresh retry.
+    } finally {
+      checkingPaymentIdsRef.current.delete(paymentId);
+      setCheckingPaymentIds(prev => prev.filter(id => id !== paymentId));
+    }
+  }, [applyChatPaymentStatus]);
+
+  const syncPendingChatPayments = useCallback(() => {
+    const pendingIds = new Set<string>();
+    messagesRef.current.forEach(message => {
+      if (message.sssPaymentIntent?.status === 'pending') pendingIds.add(message.sssPaymentIntent.paymentId);
+      if (message.businessPermitPaymentIntent?.status === 'pending') pendingIds.add(message.businessPermitPaymentIntent.paymentId);
+    });
+    pendingIds.forEach(paymentId => void checkChatPaymentStatus(paymentId));
+  }, [checkChatPaymentStatus]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    const handleFocus = () => syncPendingChatPayments();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') syncPendingChatPayments();
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key?.startsWith(PAYMENT_STATUS_STORAGE_PREFIX) || !event.newValue) return;
+      try {
+        const signal = JSON.parse(event.newValue) as PaymentStatusSignal;
+        const paymentId = event.key.slice(PAYMENT_STATUS_STORAGE_PREFIX.length);
+        if (signal.status && signal.updatedAt) applyChatPaymentStatus(paymentId, signal);
+      } catch {
+        // Ignore malformed status messages from unrelated or stale storage.
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('storage', handleStorage);
+    const interval = window.setInterval(syncPendingChatPayments, 8000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('storage', handleStorage);
+      window.clearInterval(interval);
+    };
+  }, [applyChatPaymentStatus, syncPendingChatPayments]);
 
   // ── Live input translation ─────────────────────────────────────────────────
   // When the user types or speaks Filipino/non-English, debounce 600ms then
@@ -489,9 +670,292 @@ const AIChatHome = () => {
     appendSSSAgentActionTurn('Start another SSS transaction', turn);
   };
 
+  const appendBusinessPermitAgentTurn = (turn: BusinessPermitAgentTurn) => {
+    setBusinessPermitAgent(turn.state);
+    const messageId = `${Date.now()}-business-permit-agent`;
+    setActiveBusinessPermitMessageId(turn.state && turn.prompt ? messageId : null);
+    setBusinessPermitDocumentError(null);
+    setMessages(prev => [
+      ...prev,
+      {
+        id: messageId,
+        role: 'assistant',
+        content: turn.reply,
+        timestamp: new Date(),
+        businessPermitAgentPrompt: turn.prompt,
+        businessPermitStateSnapshot: turn.state ? { ...turn.state } : undefined,
+        businessPermitDraft: turn.draft,
+        businessPermitApplication: turn.application,
+        businessPermitPaymentIntent: turn.paymentIntent,
+      },
+    ]);
+  };
+
+  const appendBusinessPermitActionTurn = (userContent: string, turn: BusinessPermitAgentTurn) => {
+    const now = Date.now();
+    const assistantMessageId = `${now}-business-permit-action-assistant`;
+    setBusinessPermitAgent(turn.state);
+    setActiveBusinessPermitMessageId(turn.state && turn.prompt ? assistantMessageId : null);
+    setBusinessPermitDocumentError(null);
+    setMessages(prev => [
+      ...prev,
+      { id: `${now}-business-permit-action-user`, role: 'user', content: userContent, timestamp: new Date() },
+      {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: turn.reply,
+        timestamp: new Date(),
+        businessPermitAgentPrompt: turn.prompt,
+        businessPermitStateSnapshot: turn.state ? { ...turn.state } : undefined,
+        businessPermitDraft: turn.draft,
+        businessPermitApplication: turn.application,
+        businessPermitPaymentIntent: turn.paymentIntent,
+      },
+    ]);
+  };
+
+  const appendBusinessPermitNotice = (content: string, prompt?: BusinessPermitAgentPrompt) => {
+    const messageId = `${Date.now()}-business-permit-notice`;
+    if (prompt) setActiveBusinessPermitMessageId(messageId);
+    const snapshot = prompt && businessPermitAgent ? { ...businessPermitAgent } : undefined;
+    setMessages(prev => [
+      ...prev,
+      {
+        id: messageId,
+        role: 'assistant',
+        content,
+        timestamp: new Date(),
+        businessPermitAgentPrompt: prompt,
+        businessPermitStateSnapshot: snapshot,
+        businessPermitDraft: snapshot ? buildBusinessPermitRenewalDraft(snapshot) || undefined : undefined,
+        businessPermitApplication: snapshot?.submittedApplication,
+      },
+    ]);
+  };
+
+  const handleVerifyBusinessPermitIdentity = async () => {
+    if (!businessPermitAgent || businessPermitAgent.stage !== 'identity' || isVerifyingBusinessPermit) return;
+    const requestId = ++businessPermitOperationRequestRef.current;
+    setIsVerifyingBusinessPermit(true);
+
+    try {
+      let livenessSessionId = '';
+      try {
+        livenessSessionId = await triggerEVerifyLivenessSDK();
+      } catch (sdkError) {
+        console.warn('Business permit chat eVerify Web SDK popup error or cancelled:', sdkError);
+        livenessSessionId = localStorage.getItem('egov_liveness_token') || '';
+      }
+      if (!livenessSessionId) {
+        throw new Error('Face Liveness Session Required: complete the camera verification to continue.');
+      }
+
+      const result = await verifyIdentity({
+        firstName: user?.firstName || 'Citizen',
+        middleName: user?.middleName || '',
+        lastName: user?.lastName || '',
+        suffix: user?.suffix || '',
+        birthDate: user?.birthdate || '1990-01-01',
+        faceLivenessSessionId: livenessSessionId,
+      });
+      if (requestId !== businessPermitOperationRequestRef.current) return;
+      if (!result.verified) throw new Error(result.message || 'PhilSys identity verification was not successful.');
+
+      if (user?.mobileNumber) {
+        try {
+          await sendVerificationConfirmation(user.mobileNumber, user.firstName || 'Citizen');
+        } catch (notificationError) {
+          console.warn('Business permit verification SMS could not be sent:', notificationError);
+        }
+      }
+
+      appendBusinessPermitActionTurn(
+        'Complete PhilSys eVerify identity verification',
+        markBusinessPermitIdentityVerified(businessPermitAgent, {
+          verificationId: result.verificationId,
+          citizenName: result.citizenName,
+          verifiedAt: result.verifiedAt,
+        })
+      );
+    } catch (verificationError) {
+      if (requestId !== businessPermitOperationRequestRef.current) return;
+      const message = verificationError instanceof Error
+        ? verificationError.message
+        : 'Identity verification failed. Please try again.';
+      appendBusinessPermitNotice(`Permit-renewal identity verification was not completed: ${message}`, {
+        conversationId: businessPermitAgent.id,
+        stage: 'identity',
+      });
+    } finally {
+      if (requestId === businessPermitOperationRequestRef.current) setIsVerifyingBusinessPermit(false);
+    }
+  };
+
+  const handleAttachBusinessPermitDocument = (documentType: BusinessPermitDocumentType, file: File) => {
+    if (!businessPermitAgent || businessPermitAgent.stage !== 'documents') return;
+    const validationError = validateBusinessPermitDocument(file);
+    if (validationError) {
+      setBusinessPermitDocumentError(`${file.name}: ${validationError}`);
+      return;
+    }
+    const turn = attachBusinessPermitDocument(businessPermitAgent, {
+      id: documentType,
+      fileName: file.name,
+      mimeType: file.type,
+      size: file.size,
+      attachedAt: new Date().toISOString(),
+    });
+    appendBusinessPermitActionTurn(`Attach ${file.name}`, turn);
+  };
+
+  const handleRemoveBusinessPermitDocument = (documentType: BusinessPermitDocumentType) => {
+    if (!businessPermitAgent || businessPermitAgent.stage !== 'documents') return;
+    appendBusinessPermitActionTurn(
+      'Remove attached permit document',
+      removeBusinessPermitDocument(businessPermitAgent, documentType)
+    );
+  };
+
+  const updateBusinessPermitReview = (updates: Partial<BusinessPermitAgentState>) => {
+    if (!businessPermitAgent || businessPermitAgent.stage !== 'review') return;
+    const updated = { ...businessPermitAgent, ...updates };
+    setBusinessPermitAgent(updated);
+    setMessages(prev => prev.map(message =>
+      message.id === activeBusinessPermitMessageId
+        ? {
+            ...message,
+            businessPermitStateSnapshot: { ...updated },
+            businessPermitDraft: buildBusinessPermitRenewalDraft(updated) || message.businessPermitDraft,
+          }
+        : message
+    ));
+  };
+
+  const handleEditBusinessPermitDocuments = () => {
+    if (!businessPermitAgent || businessPermitAgent.stage !== 'review') return;
+    appendBusinessPermitActionTurn(
+      'Review or replace the attached permit documents',
+      reopenBusinessPermitDocuments(businessPermitAgent)
+    );
+  };
+
+  const isActiveBusinessPermitReview = (message: Message): boolean =>
+    message.id === activeBusinessPermitMessageId &&
+    businessPermitAgent?.id === message.businessPermitAgentPrompt?.conversationId &&
+    businessPermitAgent?.stage === 'review';
+
+  const isActiveBusinessPermitSubmission = (message: Message): boolean =>
+    message.id === activeBusinessPermitMessageId &&
+    businessPermitAgent?.id === message.businessPermitAgentPrompt?.conversationId &&
+    businessPermitAgent?.stage === 'submitted';
+
+  const handleSubmitBusinessPermit = async () => {
+    if (!businessPermitAgent || businessPermitAgent.stage !== 'review' || isSubmittingBusinessPermit) return;
+    const draft = buildBusinessPermitRenewalDraft(businessPermitAgent);
+    if (!draft) {
+      appendBusinessPermitNotice('The permit draft has a missing or invalid field. Review every field and all five required documents before submitting.', {
+        conversationId: businessPermitAgent.id,
+        stage: 'review',
+      });
+      return;
+    }
+
+    const requestId = ++businessPermitOperationRequestRef.current;
+    setIsSubmittingBusinessPermit(true);
+    try {
+      const applicantName = user
+        ? [user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ')
+        : 'Authenticated Citizen';
+      const application = await submitBusinessPermitRenewal({
+        draft,
+        applicantName,
+        applicantEmail: user?.email,
+        applicantMobile: user?.mobileNumber,
+      });
+      if (requestId !== businessPermitOperationRequestRef.current) return;
+
+      if (user?.mobileNumber) {
+        try {
+          await sendApplicationConfirmation(
+            user.mobileNumber,
+            user.firstName || 'Citizen',
+            'Business Permit Renewal',
+            application.trackingId
+          );
+        } catch (notificationError) {
+          console.warn('Business permit submission SMS could not be sent:', notificationError);
+        }
+      }
+
+      appendBusinessPermitActionTurn(
+        'Submit this Business Permit Renewal for assessment',
+        markBusinessPermitSubmitted(businessPermitAgent, application)
+      );
+    } catch (submissionError) {
+      if (requestId !== businessPermitOperationRequestRef.current) return;
+      const message = submissionError instanceof Error ? submissionError.message : 'Unable to submit the renewal application.';
+      appendBusinessPermitNotice(`The renewal could not be submitted: ${message}`, {
+        conversationId: businessPermitAgent.id,
+        stage: 'review',
+      });
+    } finally {
+      if (requestId === businessPermitOperationRequestRef.current) setIsSubmittingBusinessPermit(false);
+    }
+  };
+
+  const handleCreateBusinessPermitPayment = async () => {
+    if (!businessPermitAgent || businessPermitAgent.stage !== 'submitted' || isCreatingBusinessPermitPayment) return;
+    const draft = buildBusinessPermitRenewalDraft(businessPermitAgent);
+    const application = businessPermitAgent.submittedApplication;
+    if (!draft || !application) return;
+
+    const requestId = ++businessPermitOperationRequestRef.current;
+    setIsCreatingBusinessPermitPayment(true);
+    try {
+      const paymentIntent = await createPaymentIntent({
+        amount: draft.totalAmount,
+        description: `Business Permit Renewal ${application.trackingId} — ${application.businessName}`,
+        citizenName: application.applicantName,
+        citizenEmail: application.applicantEmail,
+        citizenMobile: application.applicantMobile,
+        items: draft.fees.map(fee => ({ name: fee.label, amount: fee.amount })),
+      });
+      if (requestId !== businessPermitOperationRequestRef.current) return;
+      appendBusinessPermitActionTurn(
+        'Create an eGovPay link for this submitted permit renewal',
+        markBusinessPermitPaymentCreated(businessPermitAgent, paymentIntent)
+      );
+    } catch (paymentError) {
+      if (requestId !== businessPermitOperationRequestRef.current) return;
+      const message = paymentError instanceof Error ? paymentError.message : 'Unable to create the eGovPay transaction link.';
+      appendBusinessPermitNotice(`The eGovPay link could not be created: ${message}`, {
+        conversationId: businessPermitAgent.id,
+        stage: 'submitted',
+      });
+    } finally {
+      if (requestId === businessPermitOperationRequestRef.current) setIsCreatingBusinessPermitPayment(false);
+    }
+  };
+
+  const handleStartAnotherBusinessPermit = () => {
+    appendBusinessPermitActionTurn(
+      'Start another Business Permit Renewal',
+      startBusinessPermitAgent('Start another Business Permit Renewal')
+    );
+  };
+
   const handleSend = async (messageText?: string, suppressCta = false) => {
     const text = messageText || inputValue.trim();
-    if (!text || isLoading || isFetchingEReportLocation || isVerifyingSSS || isCreatingSSSPayment) return;
+    if (
+      !text ||
+      isLoading ||
+      isFetchingEReportLocation ||
+      isVerifyingSSS ||
+      isCreatingSSSPayment ||
+      isVerifyingBusinessPermit ||
+      isSubmittingBusinessPermit ||
+      isCreatingBusinessPermitPayment
+    ) return;
 
     setError(null);
     setInputValue('');
@@ -550,6 +1014,15 @@ const AIChatHome = () => {
         return;
       }
 
+      // Keep an active permit renewal inside its own guarded conversation.
+      // Identifiers and document metadata are handled deterministically here
+      // and are not forwarded to the general AI assistant.
+      if (businessPermitAgent) {
+        const turn = continueBusinessPermitAgent(businessPermitAgent, processText);
+        appendBusinessPermitAgentTurn(turn);
+        return;
+      }
+
       // Broad help requests stay conversational until the citizen identifies a need.
       if (isGeneralHelpRequest(processText)) {
         const assistantMessage: Message = {
@@ -574,6 +1047,14 @@ const AIChatHome = () => {
       // questions continue to the normal assistant below.
       if (isSSSAgentIntent(processText)) {
         appendSSSAgentTurn(startSSSAgent(processText));
+        return;
+      }
+
+      // Actionable Business Permit Renewal requests use the in-chat agent.
+      // Informational questions such as requirements and fee inquiries still
+      // go to the normal assistant below.
+      if (isBusinessPermitRenewalIntent(processText)) {
+        appendBusinessPermitAgentTurn(startBusinessPermitAgent(processText));
         return;
       }
 
@@ -988,6 +1469,15 @@ const AIChatHome = () => {
     setIsVerifyingSSS(false);
     setIsCreatingSSSPayment(false);
     sssOperationRequestRef.current += 1;
+    setBusinessPermitAgent(null);
+    setActiveBusinessPermitMessageId(null);
+    setIsVerifyingBusinessPermit(false);
+    setIsSubmittingBusinessPermit(false);
+    setIsCreatingBusinessPermitPayment(false);
+    setBusinessPermitDocumentError(null);
+    setCheckingPaymentIds([]);
+    checkingPaymentIdsRef.current.clear();
+    businessPermitOperationRequestRef.current += 1;
   };
 
   // ── Voice command detection ───────────────────────────────────────────────
@@ -1041,6 +1531,24 @@ const AIChatHome = () => {
       return false;
     }
 
+    if (businessPermitAgent) {
+      if (businessPermitAgent.stage === 'identity') {
+        handleVerifyBusinessPermitIdentity();
+        return true;
+      }
+      if (businessPermitAgent.stage === 'review') {
+        handleSubmitBusinessPermit();
+        return true;
+      }
+      if (businessPermitAgent.stage === 'submitted') {
+        handleCreateBusinessPermitPayment();
+        return true;
+      }
+      // Generic voice confirmation never supplies permit fields, attaches
+      // documents, or claims that an eGovPay transaction was paid.
+      return false;
+    }
+
     // Walk messages in reverse to find the last assistant message with an action
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
@@ -1067,6 +1575,8 @@ const AIChatHome = () => {
         window.speechSynthesis.speak(confirmUtterance);
         if (isSSSCtaAction(msg.ctaAction)) {
           confirmUtterance.onend = () => handleSuggestionClick('Start SSS services in chat', true);
+        } else if (isBusinessPermitRenewalCtaAction(msg.ctaAction)) {
+          confirmUtterance.onend = () => handleSuggestionClick('Renew my business permit in chat', true);
         } else if (msg.ctaAction.targetRoute) {
           confirmUtterance.onend = () => navigate(msg.ctaAction!.targetRoute!);
         } else {
@@ -1784,9 +2294,87 @@ const AIChatHome = () => {
                       <SSSPaymentCard
                         draft={message.sssDraft}
                         paymentIntent={message.sssPaymentIntent}
+                        checking={checkingPaymentIds.includes(message.sssPaymentIntent.paymentId)}
+                        onRefreshStatus={() => void checkChatPaymentStatus(message.sssPaymentIntent!.paymentId)}
                         onStartAnother={handleStartAnotherSSS}
                       />
                     )}
+
+                    {/* ACTIVE IN-CHAT BUSINESS PERMIT RENEWAL AGENT */}
+                    {message.businessPermitAgentPrompt &&
+                      !['review', 'submitted', 'payment'].includes(message.businessPermitAgentPrompt.stage) &&
+                      message.id === activeBusinessPermitMessageId &&
+                      businessPermitAgent?.id === message.businessPermitAgentPrompt.conversationId &&
+                      businessPermitAgent.stage === message.businessPermitAgentPrompt.stage &&
+                      message.businessPermitStateSnapshot && (
+                        <BusinessPermitPromptCard
+                          prompt={message.businessPermitAgentPrompt}
+                          state={businessPermitAgent}
+                          citizenName={
+                            user
+                              ? [user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ')
+                              : 'Authenticated Citizen'
+                          }
+                          profileLgu={user?.address?.city
+                            ? [user.address.city, user.address.province].filter(Boolean).join(', ')
+                            : undefined}
+                          busy={
+                            isLoading ||
+                            isVerifyingBusinessPermit ||
+                            isSubmittingBusinessPermit ||
+                            isCreatingBusinessPermitPayment
+                          }
+                          documentError={businessPermitDocumentError}
+                          onReply={reply => handleSend(reply)}
+                          onVerifyIdentity={handleVerifyBusinessPermitIdentity}
+                          onAttachDocument={handleAttachBusinessPermitDocument}
+                          onRemoveDocument={handleRemoveBusinessPermitDocument}
+                          onCancel={() => handleSend('Cancel permit renewal')}
+                        />
+                      )}
+
+                    {/* EDITABLE BUSINESS PERMIT REVIEW */}
+                    {message.businessPermitAgentPrompt?.stage === 'review' &&
+                      message.businessPermitDraft &&
+                      message.businessPermitStateSnapshot && (
+                        <BusinessPermitReviewCard
+                          state={isActiveBusinessPermitReview(message) && businessPermitAgent
+                            ? businessPermitAgent
+                            : message.businessPermitStateSnapshot}
+                          active={isActiveBusinessPermitReview(message)}
+                          busy={isSubmittingBusinessPermit}
+                          onUpdate={updateBusinessPermitReview}
+                          onEditDocuments={handleEditBusinessPermitDocuments}
+                          onSubmit={handleSubmitBusinessPermit}
+                          onCancel={() => handleSend('Cancel permit renewal')}
+                        />
+                      )}
+
+                    {/* SUBMITTED APPLICATION — PAYMENT REQUIRES A SECOND EXPLICIT ACTION */}
+                    {message.businessPermitAgentPrompt?.stage === 'submitted' &&
+                      message.businessPermitApplication && (
+                        <BusinessPermitSubmissionCard
+                          application={message.businessPermitApplication}
+                          busy={isCreatingBusinessPermitPayment}
+                          active={isActiveBusinessPermitSubmission(message)}
+                          onCreatePayment={handleCreateBusinessPermitPayment}
+                          onClose={() => handleSend('Cancel permit renewal')}
+                        />
+                      )}
+
+                    {/* PENDING BUSINESS PERMIT EGOVPAY HANDOFF */}
+                    {message.businessPermitPaymentIntent &&
+                      message.businessPermitDraft &&
+                      message.businessPermitApplication && (
+                        <BusinessPermitPaymentCard
+                          draft={message.businessPermitDraft}
+                          application={message.businessPermitApplication}
+                          paymentIntent={message.businessPermitPaymentIntent}
+                          checking={checkingPaymentIds.includes(message.businessPermitPaymentIntent.paymentId)}
+                          onRefreshStatus={() => void checkChatPaymentStatus(message.businessPermitPaymentIntent!.paymentId)}
+                          onStartAnother={handleStartAnotherBusinessPermit}
+                        />
+                      )}
 
                     {/* ⚖️ LAWS & REGULATIONS CTA CARD */}
                     {message.lawsQuery && (
@@ -2582,6 +3170,8 @@ const AIChatHome = () => {
                             onClick={() => {
                               if (isSSSCtaAction(message.ctaAction)) {
                                 handleSuggestionClick('Start SSS services in chat', true);
+                              } else if (isBusinessPermitRenewalCtaAction(message.ctaAction)) {
+                                handleSuggestionClick('Renew my business permit in chat', true);
                               } else if (message.ctaAction?.targetRoute) {
                                 navigate(message.ctaAction.targetRoute);
                               } else {
@@ -2742,7 +3332,9 @@ const AIChatHome = () => {
                     ? EREPORT_AGENT_PLACEHOLDERS[eReportAgent.stage]
                     : sssAgent
                       ? SSS_AGENT_PLACEHOLDERS[sssAgent.stage]
-                    : placeholders[placeholderIndex]
+                      : businessPermitAgent
+                        ? BUSINESS_PERMIT_AGENT_PLACEHOLDERS[businessPermitAgent.stage]
+                        : placeholders[placeholderIndex]
                 }
                 type="text"
                 value={inputValue}
@@ -2751,7 +3343,15 @@ const AIChatHome = () => {
                   setInputValue(e.target.value);
                 }}
                 onKeyDown={e => e.key === 'Enter' && !isLoading && handleSend()}
-                disabled={isLoading || isFetchingEReportLocation || isVerifyingSSS || isCreatingSSSPayment}
+                disabled={
+                  isLoading ||
+                  isFetchingEReportLocation ||
+                  isVerifyingSSS ||
+                  isCreatingSSSPayment ||
+                  isVerifyingBusinessPermit ||
+                  isSubmittingBusinessPermit ||
+                  isCreatingBusinessPermitPayment
+                }
               />
               {/* Translation hint — shows original Filipino text below input */}
               {inputOriginal && !isTranslatingInput && (
@@ -2773,7 +3373,15 @@ const AIChatHome = () => {
             <button
               type="button"
               onClick={startVoiceInput}
-              disabled={isLoading || isFetchingEReportLocation || isVerifyingSSS || isCreatingSSSPayment}
+              disabled={
+                isLoading ||
+                isFetchingEReportLocation ||
+                isVerifyingSSS ||
+                isCreatingSSSPayment ||
+                isVerifyingBusinessPermit ||
+                isSubmittingBusinessPermit ||
+                isCreatingBusinessPermitPayment
+              }
               className={`w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full transition-all duration-200 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
                 isListening
                   ? 'bg-red-500 text-white shadow-lg shadow-red-200 animate-pulse'
@@ -2805,6 +3413,9 @@ const AIChatHome = () => {
                 isFetchingEReportLocation ||
                 isVerifyingSSS ||
                 isCreatingSSSPayment ||
+                isVerifyingBusinessPermit ||
+                isSubmittingBusinessPermit ||
+                isCreatingBusinessPermitPayment ||
                 !inputValue.trim()
               }
               className="w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full bg-primary text-white shadow-md hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed shrink-0"

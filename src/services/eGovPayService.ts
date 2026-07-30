@@ -28,6 +28,8 @@ export interface PaymentIntent {
   status: 'pending' | 'paid' | 'failed' | 'cancelled'
   createdAt: string
   expiresAt: string
+  paidAt?: string
+  statusUpdatedAt?: string
 }
 
 export interface TransactionDetails {
@@ -39,6 +41,65 @@ export interface TransactionDetails {
   currency: string
   paid_at?: string
   created_at?: string
+}
+
+export interface PaymentStatusSignal {
+  paymentId: string
+  referenceNumber: string
+  transactionId: string
+  status: PaymentIntent['status']
+  gatewayStatus: string
+  amount: number
+  paidAt?: string
+  updatedAt: string
+}
+
+export const PAYMENT_STATUS_STORAGE_PREFIX = 'egov_payment_status:'
+
+export const normalizePaymentStatus = (status?: string): PaymentIntent['status'] => {
+  const normalized = (status || '').toUpperCase()
+  if (normalized === 'PAID' || normalized === 'SUCCESS') return 'paid'
+  if (normalized === 'FAILED') return 'failed'
+  if (normalized === 'CANCELLED' || normalized === 'CANCELED') return 'cancelled'
+  return 'pending'
+}
+
+export const publishPaymentStatus = (details: TransactionDetails): PaymentStatusSignal => {
+  const updatedAt = new Date().toISOString()
+  const signal: PaymentStatusSignal = {
+    paymentId: details.uuid,
+    referenceNumber: details.refno,
+    transactionId: details.txnid,
+    status: normalizePaymentStatus(details.payment_status),
+    gatewayStatus: details.payment_status,
+    amount: Number.parseFloat(details.amount || '0') || 0,
+    paidAt: details.paid_at,
+    updatedAt,
+  }
+
+  try {
+    const identifiers = [details.uuid, details.txnid, details.refno].filter(Boolean)
+    identifiers.forEach(identifier => {
+      localStorage.setItem(`${PAYMENT_STATUS_STORAGE_PREFIX}${identifier}`, JSON.stringify(signal))
+    })
+    localStorage.setItem('egov_latest_payment_status', JSON.stringify(signal))
+  } catch (error) {
+    console.warn('Could not publish the eGovPay status to other app tabs:', error)
+  }
+
+  return signal
+}
+
+export const getPublishedPaymentStatus = (paymentId: string): PaymentStatusSignal | null => {
+  try {
+    const raw = localStorage.getItem(`${PAYMENT_STATUS_STORAGE_PREFIX}${paymentId}`)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<PaymentStatusSignal>
+    if (!parsed.paymentId || !parsed.status || !parsed.updatedAt) return null
+    return parsed as PaymentStatusSignal
+  } catch {
+    return null
+  }
 }
 
 /**

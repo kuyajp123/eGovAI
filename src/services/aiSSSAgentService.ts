@@ -36,6 +36,7 @@ export interface SSSAgentState {
   membershipType?: string
   applicablePeriod?: string
   prn?: string
+  paymentStatus?: PaymentIntent['status']
   sourceMessages: string[]
   offTopicCount: number
 }
@@ -329,6 +330,18 @@ export const continueSSSAgent = (state: SSSAgentState, message: string): SSSAgen
   }
 
   if (state.stage === 'payment') {
+    if (state.paymentStatus === 'paid') {
+      return {
+        state,
+        reply: 'eGovPay has confirmed this SSS payment. The card above now shows **Paid · Confirmed**. You do not need to pay again.',
+      }
+    }
+    if (state.paymentStatus === 'failed' || state.paymentStatus === 'cancelled') {
+      return {
+        state,
+        reply: `eGovPay reports this checkout as **${state.paymentStatus}**. Use Refresh Payment Status before starting another transaction if you believe payment completed.`,
+      }
+    }
     return {
       state,
       reply:
@@ -394,7 +407,7 @@ export const markSSSPaymentCreated = (
   state: SSSAgentState,
   paymentIntent: PaymentIntent
 ): SSSAgentTurn => ({
-  state: { ...state, stage: 'payment' },
+  state: { ...state, stage: 'payment', paymentStatus: 'pending' },
   reply:
     'Your eGovPay test checkout link is ready. **This transaction is still pending and has not been paid.** Review the reference and amount, then use the official gateway button below when you are ready.',
   draft: buildSSSTransactionDraft(state) || undefined,

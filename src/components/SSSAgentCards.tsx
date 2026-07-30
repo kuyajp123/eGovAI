@@ -288,46 +288,77 @@ export const SSSTransactionReviewCard = ({
 interface SSSPaymentCardProps {
   draft: SSSTransactionDraft
   paymentIntent: PaymentIntent
+  checking: boolean
+  onRefreshStatus: () => void
   onStartAnother: () => void
 }
 
-export const SSSPaymentCard = ({ draft, paymentIntent, onStartAnother }: SSSPaymentCardProps) => (
-  <div className="mt-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-4">
-    <div className="flex items-center justify-between gap-2 border-b border-emerald-200 pb-2">
-      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
-        <span className="material-symbols-outlined text-base">open_in_new</span>
-        Official eGovPay Test Checkout
+export const SSSPaymentCard = ({
+  draft,
+  paymentIntent,
+  checking,
+  onRefreshStatus,
+  onStartAnother,
+}: SSSPaymentCardProps) => {
+  const isPaid = paymentIntent.status === 'paid'
+  const isUnsuccessful = paymentIntent.status === 'failed' || paymentIntent.status === 'cancelled'
+  const statusLabel = isPaid
+    ? 'Paid · Confirmed'
+    : paymentIntent.status === 'failed'
+      ? 'Payment failed'
+      : paymentIntent.status === 'cancelled'
+        ? 'Payment cancelled'
+        : 'Pending · Not paid'
+
+  return (
+    <div className={`mt-4 p-4 rounded-xl border space-y-4 ${isUnsuccessful ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
+      <div className={`flex items-center justify-between gap-2 border-b pb-2 ${isUnsuccessful ? 'border-rose-200' : 'border-emerald-200'}`}>
+        <div className={`flex items-center gap-1.5 text-xs font-bold ${isUnsuccessful ? 'text-rose-800' : 'text-emerald-800'}`}>
+          <span className="material-symbols-outlined text-base">{isPaid ? 'verified' : isUnsuccessful ? 'error' : 'open_in_new'}</span>
+          {isPaid ? 'eGovPay Payment Confirmed' : 'Official eGovPay Test Checkout'}
+        </div>
+        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${isPaid ? 'bg-emerald-600 text-white' : isUnsuccessful ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{statusLabel}</span>
       </div>
-      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">Pending · Not paid</span>
+
+      {isPaid && (
+        <div className="p-3 rounded-lg bg-emerald-100 border border-emerald-200 text-[11px] text-emerald-900 flex items-start gap-2">
+          <span className="material-symbols-outlined text-base">task_alt</span>
+          <span><strong>Payment received and verified.</strong> You do not need to pay this SSS transaction again.</span>
+        </div>
+      )}
+
+      <div className={`p-3 rounded-lg bg-white border text-[11px] space-y-2 ${isUnsuccessful ? 'border-rose-100' : 'border-emerald-100'}`}>
+        <div className="flex justify-between gap-3"><span className="text-on-surface-variant">SSS Service</span><span className="font-semibold text-right">{draft.serviceTitle}</span></div>
+        <div className="flex justify-between gap-3"><span className="text-on-surface-variant">Reference</span><span className="font-mono font-bold">{paymentIntent.referenceNumber}</span></div>
+        <div className="flex justify-between gap-3"><span className="text-on-surface-variant">Amount</span><span className="font-mono font-bold text-emerald-700">₱{paymentIntent.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+        {paymentIntent.paidAt
+          ? <div className="flex justify-between gap-3"><span className="text-on-surface-variant">Paid at</span><span>{new Date(paymentIntent.paidAt).toLocaleString()}</span></div>
+          : <div className="flex justify-between gap-3"><span className="text-on-surface-variant">Link expires</span><span>{new Date(paymentIntent.expiresAt).toLocaleString()}</span></div>}
+      </div>
+
+      {paymentIntent.status === 'pending' && (
+        <a href={paymentIntent.paymentUrl} target="_blank" rel="noopener noreferrer" className="w-full py-3 rounded-lg bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 flex items-center justify-center gap-1.5 shadow-sm">
+          <span className="material-symbols-outlined text-base">open_in_new</span>
+          Proceed to Official eGovPay Test Gateway
+        </a>
+      )}
+
+      {!isPaid && (
+        <button type="button" onClick={onRefreshStatus} disabled={checking} className="w-full py-2.5 rounded-lg border border-emerald-300 bg-white text-emerald-800 font-bold text-xs flex items-center justify-center gap-1.5 disabled:opacity-50">
+          <span className={`material-symbols-outlined text-sm ${checking ? 'animate-spin' : ''}`}>{checking ? 'progress_activity' : 'refresh'}</span>
+          {checking ? 'Checking eGovPay...' : 'Refresh Payment Status'}
+        </button>
+      )}
+
+      <p className="text-[10px] leading-relaxed text-on-surface-variant text-center">
+        {isPaid
+          ? 'Status verified from eGovPay. This card updates automatically when the gateway confirms payment.'
+          : 'After checkout, return to this tab. The card refreshes automatically, or you can check the official status manually.'}
+      </p>
+
+      <button type="button" onClick={onStartAnother} className="w-full py-2 rounded-lg border border-emerald-200 bg-white text-emerald-800 font-semibold text-[11px]">
+        Start Another SSS Transaction
+      </button>
     </div>
-
-    <div className="p-3 rounded-lg bg-white border border-emerald-100 text-[11px] space-y-2">
-      <div className="flex justify-between gap-3"><span className="text-on-surface-variant">SSS Service</span><span className="font-semibold text-right">{draft.serviceTitle}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-on-surface-variant">Reference</span><span className="font-mono font-bold">{paymentIntent.referenceNumber}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-on-surface-variant">Amount</span><span className="font-mono font-bold text-emerald-700">₱{paymentIntent.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-on-surface-variant">Link expires</span><span>{new Date(paymentIntent.expiresAt).toLocaleString()}</span></div>
-    </div>
-
-    <a
-      href={paymentIntent.paymentUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="w-full py-3 rounded-lg bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 flex items-center justify-center gap-1.5 shadow-sm"
-    >
-      <span className="material-symbols-outlined text-base">open_in_new</span>
-      Proceed to Official eGovPay Test Gateway
-    </a>
-
-    <p className="text-[10px] leading-relaxed text-on-surface-variant text-center">
-      Payment happens only on the hosted eGovPay page. After checkout, eGovPay redirects back to this app to verify the real transaction status.
-    </p>
-
-    <button
-      type="button"
-      onClick={onStartAnother}
-      className="w-full py-2 rounded-lg border border-emerald-200 bg-white text-emerald-800 font-semibold text-[11px]"
-    >
-      Start Another SSS Transaction
-    </button>
-  </div>
-)
+  )
+}

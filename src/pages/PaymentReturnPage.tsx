@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getTransactionDetails, TransactionDetails } from '../services/eGovPayService'
+import { getTransactionDetails, publishPaymentStatus, TransactionDetails } from '../services/eGovPayService'
 import { sendPaymentConfirmation } from '../services/eMessageService'
 
 const POLL_INTERVAL_MS = 3000   // check every 3 seconds
@@ -66,6 +66,7 @@ const PaymentReturnPage = () => {
     try {
       const data = await getTransactionDetails(targetUuid)
       setDetails(data)
+      publishPaymentStatus(data)
       const status = (data.payment_status || '').toUpperCase()
       const resolved = status === 'PAID' || status === 'SUCCESS' || status === 'FAILED' || status === 'CANCELLED'
 
@@ -80,14 +81,16 @@ const PaymentReturnPage = () => {
       console.warn('Status poll failed via eGovPay API:', err)
       // Fallback to URL status if present
       if (urlStatus) {
-        setDetails({
+        const fallbackDetails: TransactionDetails = {
           uuid: targetUuid,
           refno: searchParams.get('refno') || targetUuid,
           txnid: txnid || targetUuid,
           amount: searchParams.get('amount') || cachedTx?.amount || '0.00',
           payment_status: urlStatus,
           currency: 'PHP',
-        })
+        }
+        setDetails(fallbackDetails)
+        publishPaymentStatus(fallbackDetails)
       }
     }
   }, [uuid, txnid, urlStatus, searchParams, cachedTx, sendSmsConfirmation])
@@ -247,6 +250,9 @@ const PaymentReturnPage = () => {
             <h2 className="text-xl font-bold text-on-surface">Payment Successful!</h2>
             <p className="text-xs text-emerald-700 font-semibold">
               Your transaction has been processed and verified by eGovPay.
+            </p>
+            <p className="text-[11px] text-on-surface-variant max-w-sm mx-auto pt-1">
+              You may close this payment tab and return to the AI chat. The original payment card will update automatically.
             </p>
           </div>
 
