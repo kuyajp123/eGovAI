@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import EGovSignInButton from '../components/EGovSignInButton'
+import EGovSignInForm from '../components/EGovSignInForm'
 import EBuddyMascot from '../components/EBuddyMascot'
 import { useEffect } from 'react'
 
@@ -29,16 +29,14 @@ const WelcomePage = () => {
           <p className="text-lg text-on-surface-variant max-w-xl mx-auto md:mx-0">
             Find, prepare, pay, submit, and track government services in one place. Experience a frictionless bridge between citizens and administrative processes.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start pt-4 max-w-md">
-            <div className="flex-1">
-              <EGovSignInButton />
-            </div>
+          <div className="pt-4 max-w-md mx-auto md:mx-0">
+            <EGovSignInForm />
           </div>
           <p className="text-sm text-on-surface-variant mt-4 flex items-center gap-2">
             <span className="material-symbols-outlined text-tertiary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
               shield
             </span>
-            Secure authentication via eGovPH Single Sign-On
+            API-backed prototype authentication. No local user database is required.
           </p>
         </div>
         <div className="flex-1 w-full relative">
