@@ -32,7 +32,7 @@ interface TranslatorResponse {
   transliterated_prompt: string;
 }
 
-interface TourismResponse {
+export interface TourismResponse {
   data: string;
   session_id: string;
 }
@@ -225,13 +225,6 @@ export const updateLastLogin = async (userId: string): Promise<void> => {
 const INTEGRATION_BASE_URL = '/integration-api';
 const ACCESS_CODE = import.meta.env.VITE_EGOV_ACCESS_CODE;
 
-// Debug: Log configuration
-console.log('Integration API Config:', {
-  baseUrl: INTEGRATION_BASE_URL,
-  hasAccessCode: !!ACCESS_CODE,
-  accessCodePrefix: ACCESS_CODE?.substring(0, 10) + '...',
-});
-
 /**
  * Get or generate access token for AI Integration API
  */
@@ -406,10 +399,40 @@ export const generateTourismContent = async (prompt: string, category: string = 
     });
 
     if (!response.ok) {
-      throw new Error('Failed to generate tourism content');
+      throw new Error(`Tourism API request failed (HTTP ${response.status})`);
     }
 
-    return await response.json();
+    const payload: unknown = await response.json();
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('Tourism API returned an invalid response.');
+    }
+
+    const result = payload as Record<string, unknown>;
+    const nestedData = result.data && typeof result.data === 'object'
+      ? result.data as Record<string, unknown>
+      : undefined;
+    const content = [
+      result.data,
+      result.response,
+      result.content,
+      result.message,
+      nestedData?.response,
+      nestedData?.content,
+      nestedData?.message,
+    ].find(value => typeof value === 'string' && value.trim());
+
+    if (typeof content !== 'string') {
+      throw new Error('Tourism API returned no readable content.');
+    }
+
+    return {
+      data: content.trim(),
+      session_id: typeof result.session_id === 'string'
+        ? result.session_id
+        : typeof nestedData?.session_id === 'string'
+          ? nestedData.session_id
+          : `TOURISM-${Date.now()}`,
+    };
   } catch (error) {
     console.error('Tourism generator error:', error);
     throw error;

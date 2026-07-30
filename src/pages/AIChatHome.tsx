@@ -12,6 +12,7 @@ import {
   BusinessPermitReviewCard,
   BusinessPermitSubmissionCard,
 } from '../components/BusinessPermitAgentCards';
+import { TourismDestinationPickerCard, TourismResultCard } from '../components/TourismResultCard';
 import { useAuth } from '../context/AuthContext';
 import { AiBusinessAction, processAiBusinessIntent } from '../services/aiBusinessService';
 import { CtaAction, detectCtaAction } from '../services/aiCtaService';
@@ -84,6 +85,17 @@ import {
   validateBusinessPermitDocument,
 } from '../services/businessPermitService';
 import { sendApplicationConfirmation } from '../services/eMessageService';
+import {
+  TourismPlannerPrompt,
+  TourismPlannerState,
+  TourismPlannerTurn,
+  TourismResult,
+  continueTourismPlanner,
+  isTourismIntent,
+  processTourismIntent,
+  shouldAskForTourismDestination,
+  startTourismPlanner,
+} from '../services/aiTourismService';
 
 interface Message {
   id: string;
@@ -104,6 +116,8 @@ interface Message {
   businessPermitDraft?: BusinessPermitRenewalDraft;
   businessPermitApplication?: BusinessPermitRenewalApplication;
   businessPermitPaymentIntent?: PaymentIntent;
+  tourismPlannerPrompt?: TourismPlannerPrompt;
+  tourismResult?: TourismResult;
   businessAction?: AiBusinessAction;
   identityCard?: IdentityCardData;
   ctaAction?: CtaAction;
@@ -151,6 +165,8 @@ const BUSINESS_PERMIT_AGENT_PLACEHOLDERS: Record<BusinessPermitAgentState['stage
   submitted: 'Use Create eGovPay Link above, or close the agent...',
   payment: 'Payment status and next actions are shown above...',
 };
+
+const TOURISM_PLANNER_PLACEHOLDER = 'Type any Philippine destination...';
 
 const isBusinessPermitRenewalCtaAction = (action?: CtaAction): boolean =>
   action?.actionType === 'business_permit_renewal';
@@ -219,6 +235,8 @@ const AIChatHome = () => {
   const [isSubmittingBusinessPermit, setIsSubmittingBusinessPermit] = useState(false);
   const [isCreatingBusinessPermitPayment, setIsCreatingBusinessPermitPayment] = useState(false);
   const [businessPermitDocumentError, setBusinessPermitDocumentError] = useState<string | null>(null);
+  const [tourismPlanner, setTourismPlanner] = useState<TourismPlannerState | null>(null);
+  const [activeTourismMessageId, setActiveTourismMessageId] = useState<string | null>(null);
   const [checkingPaymentIds, setCheckingPaymentIds] = useState<string[]>([]);
   const checkingPaymentIdsRef = useRef(new Set<string>());
   const businessPermitOperationRequestRef = useRef(0);
@@ -231,6 +249,7 @@ const AIChatHome = () => {
     'How to apply for a Business Permit in 2026?',
     'How to request PSA Birth Certificate online?',
     'Where is the nearest Social Security office?',
+    'Help me choose a travel destination',
   ];
 
   const featureCards = [
@@ -258,6 +277,12 @@ const AIChatHome = () => {
       desc: 'SSS, GSIS, PhilHealth, Pag-IBIG contributions & loans',
       query: 'How can I check my SSS contribution and loan status?',
     },
+    {
+      icon: 'travel_explore',
+      title: 'Tourism & Travel',
+      desc: 'Philippine destinations, itineraries, budgets, and transport tips',
+      query: 'Help me plan a trip',
+    },
   ];
 
   const quickPrompts = [
@@ -267,6 +292,7 @@ const AIChatHome = () => {
     'PSA Birth Certificate',
     'PhilHealth Membership',
     'TIN Application',
+    'Choose a Travel Destination',
   ];
 
   useEffect(() => {
@@ -474,6 +500,22 @@ const AIChatHome = () => {
       timestamp: new Date(),
       reportAgentPrompt: turn.prompt,
       reportDraft: turn.draft,
+    };
+    setMessages(prev => [...prev, assistantMessage]);
+  };
+
+  const appendTourismPlannerTurn = (turn: TourismPlannerTurn) => {
+    setTourismPlanner(turn.state);
+    const messageId = `${Date.now()}-tourism-planner`;
+    setActiveTourismMessageId(turn.state && turn.prompt ? messageId : null);
+    const assistantMessage: Message = {
+      id: messageId,
+      role: 'assistant',
+      content: turn.reply,
+      timestamp: new Date(),
+      tourismPlannerPrompt: turn.prompt,
+      tourismResult: turn.result,
+      sessionId: turn.result?.sessionId,
     };
     setMessages(prev => [...prev, assistantMessage]);
   };
@@ -1023,6 +1065,14 @@ const AIChatHome = () => {
         return;
       }
 
+      // A generic travel request becomes a guarded destination-selection turn.
+      // Only a validated destination is sent to the dedicated Tourism endpoint.
+      if (tourismPlanner) {
+        const turn = await continueTourismPlanner(tourismPlanner, processText);
+        appendTourismPlannerTurn(turn);
+        return;
+      }
+
       // Broad help requests stay conversational until the citizen identifies a need.
       if (isGeneralHelpRequest(processText)) {
         const assistantMessage: Message = {
@@ -1055,6 +1105,29 @@ const AIChatHome = () => {
       // go to the normal assistant below.
       if (isBusinessPermitRenewalIntent(processText)) {
         appendBusinessPermitAgentTurn(startBusinessPermitAgent(processText));
+        return;
+      }
+
+      // Philippine destination, itinerary, activity, budget, and transport
+      // requests use the dedicated eGovPH Tourism endpoint. Passport, visa,
+      // and other travel-document requests remain with their proper services.
+      if (isTourismIntent(processText)) {
+        if (shouldAskForTourismDestination(processText)) {
+          appendTourismPlannerTurn(startTourismPlanner(processText));
+          return;
+        }
+
+        const tourismIntent = await processTourismIntent(processText);
+        if (!tourismIntent.result) return;
+        const assistantMessage: Message = {
+          id: `${Date.now()}-tourism`,
+          role: 'assistant',
+          content: tourismIntent.content || 'The Tourism service did not return readable content.',
+          timestamp: new Date(),
+          tourismResult: tourismIntent.result,
+          sessionId: tourismIntent.result.sessionId,
+        };
+        setMessages(prev => [...prev, assistantMessage]);
         return;
       }
 
@@ -1475,6 +1548,8 @@ const AIChatHome = () => {
     setIsSubmittingBusinessPermit(false);
     setIsCreatingBusinessPermitPayment(false);
     setBusinessPermitDocumentError(null);
+    setTourismPlanner(null);
+    setActiveTourismMessageId(null);
     setCheckingPaymentIds([]);
     checkingPaymentIdsRef.current.clear();
     businessPermitOperationRequestRef.current += 1;
@@ -1784,7 +1859,11 @@ const AIChatHome = () => {
                 {quickPrompts.map((prompt, index) => (
                   <button
                     key={index}
-                    onClick={() => handleSuggestionClick(`How to apply or renew ${prompt}?`)}
+                    onClick={() => handleSuggestionClick(
+                      prompt === 'Choose a Travel Destination'
+                        ? 'Help me plan a trip'
+                        : `How to apply or renew ${prompt}?`
+                    )}
                     className="px-4 py-2 rounded-full bg-white hover:bg-primary-container/20 border border-outline-variant/40 hover:border-primary/40 text-on-surface-variant hover:text-primary text-xs font-medium transition-all shadow-sm active:scale-95"
                   >
                     ✨ {prompt}
@@ -2375,6 +2454,26 @@ const AIChatHome = () => {
                           onStartAnother={handleStartAnotherBusinessPermit}
                         />
                       )}
+
+                    {/* ACTIVE TOURISM DESTINATION SELECTION */}
+                    {message.tourismPlannerPrompt &&
+                      message.id === activeTourismMessageId &&
+                      tourismPlanner?.id === message.tourismPlannerPrompt.conversationId && (
+                        <TourismDestinationPickerCard
+                          prompt={message.tourismPlannerPrompt}
+                          busy={isLoading}
+                          onReply={destination => handleSend(destination)}
+                          onCancel={() => handleSend('Cancel tourism planning')}
+                        />
+                      )}
+
+                    {/* EGOVPH TOURISM API RESULT */}
+                    {message.tourismResult && (
+                      <TourismResultCard
+                        result={message.tourismResult}
+                        onFollowUp={prompt => handleSuggestionClick(prompt, true)}
+                      />
+                    )}
 
                     {/* ⚖️ LAWS & REGULATIONS CTA CARD */}
                     {message.lawsQuery && (
@@ -3334,7 +3433,9 @@ const AIChatHome = () => {
                       ? SSS_AGENT_PLACEHOLDERS[sssAgent.stage]
                       : businessPermitAgent
                         ? BUSINESS_PERMIT_AGENT_PLACEHOLDERS[businessPermitAgent.stage]
-                        : placeholders[placeholderIndex]
+                        : tourismPlanner
+                          ? TOURISM_PLANNER_PLACEHOLDER
+                          : placeholders[placeholderIndex]
                 }
                 type="text"
                 value={inputValue}
