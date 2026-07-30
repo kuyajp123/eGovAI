@@ -7,7 +7,26 @@ import { CtaAction, detectCtaAction } from '../services/aiCtaService';
 import { IdentityCardData, processAiIdentityIntent } from '../services/aiIdentityService';
 import { TransparencyResult, processTransparencyIntent } from '../services/aiTransparencyService';
 import { generateAIResponse, generateSpeech, translateText } from '../services/egovService';
-import { IncidentReport, processAiReportIntent } from '../services/eReportService';
+import {
+  AiReportDraft,
+  IncidentReport,
+  ReportCategory,
+  ReportSeverity,
+  categoryLabels,
+  submitIncidentReport,
+} from '../services/eReportService';
+import {
+  EReportAgentPrompt,
+  EReportAgentState,
+  EReportAgentTurn,
+  attachEReportPhoto,
+  buildEReportDraft,
+  continueEReportAgent,
+  isEReportAgentIntent,
+  isGeneralHelpRequest,
+  startEReportAgent,
+  useEReportLocation,
+} from '../services/aiEReportAgentService';
 
 interface Message {
   id: string;
@@ -15,7 +34,10 @@ interface Message {
   content: string;
   timestamp: Date;
   sessionId?: string;
-  report?: IncidentReport;
+  reportDraft?: AiReportDraft;
+  reportAgentPrompt?: EReportAgentPrompt;
+  submittedReport?: IncidentReport;
+  imagePreview?: string;
   businessAction?: AiBusinessAction;
   identityCard?: IdentityCardData;
   ctaAction?: CtaAction;
@@ -25,6 +47,15 @@ interface Message {
   /** Set when the user's message was auto-translated before processing */
   translatedFrom?: { originalText: string; sourceLang: string; sourceLabel: string };
 }
+
+const EREPORT_AGENT_PLACEHOLDERS: Record<EReportAgentState['stage'], string> = {
+  incident: 'Describe what happened and what was affected...',
+  title: 'Type a short incident title, or use the suggestion...',
+  location: 'Type the incident address or nearest landmark...',
+  severity: 'Choose Low, Medium, High, or Critical...',
+  photo: 'Use the photo buttons, or type “skip photo”...',
+  review: 'Edit the review card, or tell me what to change...',
+};
 
 // ── Language detection helper ─────────────────────────────────────────────────
 // Detects Filipino/Tagalog and other non-English languages using common function
@@ -72,6 +103,12 @@ const AIChatHome = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [category] = useState('PH');
   const [isListening, setIsListening] = useState(false);
+  const [eReportAgent, setEReportAgent] = useState<EReportAgentState | null>(null);
+  const [activeEReportMessageId, setActiveEReportMessageId] = useState<string | null>(null);
+  const [isSubmittingEReport, setIsSubmittingEReport] = useState(false);
+  const [manualEReportLocation, setManualEReportLocation] = useState('');
+  const [isFetchingEReportLocation, setIsFetchingEReportLocation] = useState(false);
+  const eReportLocationRequestRef = useRef(0);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
 
@@ -202,9 +239,24 @@ const AIChatHome = () => {
     return userContext;
   };
 
+  const appendEReportAgentTurn = (turn: EReportAgentTurn) => {
+    setEReportAgent(turn.state);
+    const messageId = `${Date.now()}-ereport-agent`;
+    setActiveEReportMessageId(turn.state && turn.prompt ? messageId : null);
+    const assistantMessage: Message = {
+      id: messageId,
+      role: 'assistant',
+      content: turn.reply,
+      timestamp: new Date(),
+      reportAgentPrompt: turn.prompt,
+      reportDraft: turn.draft,
+    };
+    setMessages(prev => [...prev, assistantMessage]);
+  };
+
   const handleSend = async (messageText?: string, suppressCta = false) => {
     const text = messageText || inputValue.trim();
-    if (!text || isLoading) return;
+    if (!text || isLoading || isFetchingEReportLocation) return;
 
     setError(null);
     setInputValue('');
@@ -245,6 +297,34 @@ const AIChatHome = () => {
           // Translation failed — fall back to original text, no badge
           processText = text;
         }
+      }
+
+      // Continue an active eReport agent before routing the message to other services.
+      // Unrelated replies are handled inside the agent without contaminating its draft.
+      if (eReportAgent) {
+        const turn = await continueEReportAgent(eReportAgent, processText);
+        appendEReportAgentTurn(turn);
+        return;
+      }
+
+      // Broad help requests stay conversational until the citizen identifies a need.
+      if (isGeneralHelpRequest(processText)) {
+        const assistantMessage: Message = {
+          id: `${Date.now()}-help`,
+          role: 'assistant',
+          content:
+            'Of course. What type of help do you need? You can describe a government service, ask a question, or tell me about a community incident that you want to report.',
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+        return;
+      }
+
+      // Start the multi-turn eReport agent only for a report request or incident narrative.
+      if (isEReportAgentIntent(processText)) {
+        const turn = await startEReportAgent(processText);
+        appendEReportAgentTurn(turn);
+        return;
       }
 
       // 0. Check if user is asking a DBM budget/transparency question (SAAODB, NCA, SARO, LGSF)
@@ -313,56 +393,272 @@ const AIChatHome = () => {
         return;
       }
 
-      // 2. Check if user is describing an incident/problem to report
-      const aiReportResult = await processAiReportIntent(processText, user);
+      // 2. Check if user is requesting Business Permit or Tax Payment
+      const aiBusinessResult = processAiBusinessIntent(processText, user);
 
-      if (aiReportResult.isReportIntent && aiReportResult.report) {
-        // Auto-filed eReport!
+      if (aiBusinessResult.isBusinessIntent && aiBusinessResult.action) {
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: aiReportResult.aiSummaryText || 'Incident report filed successfully.',
+          content: aiBusinessResult.aiSummaryText || 'Here is your automated business application.',
           timestamp: new Date(),
-          report: aiReportResult.report,
+          businessAction: aiBusinessResult.action,
         };
         setMessages(prev => [...prev, assistantMessage]);
       } else {
-        // 3. Check if user is requesting Business Permit or Tax Payment
-        const aiBusinessResult = processAiBusinessIntent(processText, user);
+        // Normal AI assistant inquiry — send translated text to AI for an accurate response
+        const contextualPrompt = buildContextualPrompt(processText);
+        const response = await generateAIResponse(contextualPrompt, category);
 
-        if (aiBusinessResult.isBusinessIntent && aiBusinessResult.action) {
-          const assistantMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: aiBusinessResult.aiSummaryText || 'Here is your automated business application.',
-            timestamp: new Date(),
-            businessAction: aiBusinessResult.action,
-          };
-          setMessages(prev => [...prev, assistantMessage]);
-        } else {
-          // Normal AI assistant inquiry — send translated text to AI for an accurate response
-          const contextualPrompt = buildContextualPrompt(processText);
-          const response = await generateAIResponse(contextualPrompt, category);
+        // Detect if the AI response implies a submittable action (skip if this was a CTA follow-through)
+        const ctaResult = suppressCta ? { hasCta: false } : detectCtaAction(processText, response.data, user);
 
-          // Detect if the AI response implies a submittable action (skip if this was a CTA follow-through)
-          const ctaResult = suppressCta ? { hasCta: false } : detectCtaAction(processText, response.data, user);
-
-          const assistantMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: response.data,
-            timestamp: new Date(),
-            sessionId: response.session_id,
-            ctaAction: ctaResult.hasCta ? ctaResult.action : undefined,
-          };
-          setMessages(prev => [...prev, assistantMessage]);
-        }
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: response.data,
+          timestamp: new Date(),
+          sessionId: response.session_id,
+          ctaAction: ctaResult.hasCta ? ctaResult.action : undefined,
+        };
+        setMessages(prev => [...prev, assistantMessage]);
       }
     } catch (err) {
       setError('Unable to fetch response from eGovPH AI assistant. Please try again.');
       console.error('AI Chat error:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const appendEReportActionTurn = (
+    userContent: string,
+    turn: EReportAgentTurn,
+    imagePreview?: string
+  ) => {
+    const now = Date.now();
+    const assistantMessageId = `${now}-ereport-action-assistant`;
+    setEReportAgent(turn.state);
+    setActiveEReportMessageId(turn.state && turn.prompt ? assistantMessageId : null);
+    setMessages(prev => [
+      ...prev,
+      {
+        id: `${now}-ereport-action-user`,
+        role: 'user',
+        content: userContent,
+        timestamp: new Date(),
+        imagePreview,
+      },
+      {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: turn.reply,
+        timestamp: new Date(),
+        reportAgentPrompt: turn.prompt,
+        reportDraft: turn.draft,
+      },
+    ]);
+  };
+
+  const appendEReportAgentNotice = (content: string, prompt?: EReportAgentPrompt) => {
+    const messageId = `${Date.now()}-ereport-notice`;
+    if (prompt) setActiveEReportMessageId(messageId);
+    setMessages(prev => [
+      ...prev,
+      {
+        id: messageId,
+        role: 'assistant',
+        content,
+        timestamp: new Date(),
+        reportAgentPrompt: prompt,
+      },
+    ]);
+  };
+
+  const handleUseManualLocation = () => {
+    if (!eReportAgent || eReportAgent.stage !== 'location') return;
+    const location = manualEReportLocation.trim();
+    if (location.length < 3) {
+      appendEReportAgentNotice(
+        'Please enter a specific address or nearby landmark, or choose **Enable Current Location**.',
+        { conversationId: eReportAgent.id, stage: 'location' }
+      );
+      return;
+    }
+
+    appendEReportActionTurn(
+      `Use this incident location: ${location}`,
+      useEReportLocation(eReportAgent, location, `Manually entered incident location: ${location}`)
+    );
+    setManualEReportLocation('');
+  };
+
+  const handleUseCurrentLocation = async () => {
+    if (!eReportAgent || eReportAgent.stage !== 'location' || isFetchingEReportLocation) return;
+    if (!navigator.geolocation) {
+      appendEReportAgentNotice(
+        'Location services are not supported by this browser. Please type an address or landmark instead.',
+        { conversationId: eReportAgent.id, stage: 'location' }
+      );
+      return;
+    }
+
+    const requestId = ++eReportLocationRequestRef.current;
+    setIsFetchingEReportLocation(true);
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 60000,
+        });
+      });
+      if (requestId !== eReportLocationRequestRef.current) return;
+      const latitude = position.coords.latitude.toFixed(6);
+      const longitude = position.coords.longitude.toFixed(6);
+      const location = `Current coordinates: ${latitude}, ${longitude}`;
+      appendEReportActionTurn(
+        'Enable my current location for this report',
+        useEReportLocation(eReportAgent, location, 'Shared current browser coordinates')
+      );
+      setManualEReportLocation('');
+    } catch (err) {
+      if (requestId !== eReportLocationRequestRef.current) return;
+      console.warn('Unable to access browser location for eReport:', err);
+      const geolocationError = err as GeolocationPositionError;
+      const locationErrorMessage =
+        geolocationError.code === 1
+          ? 'Location permission was denied. You can still enter the incident address or landmark manually.'
+          : geolocationError.code === 2
+            ? 'Your current location could not be determined. Check that device location services are enabled, or enter the location manually.'
+            : geolocationError.code === 3
+              ? 'Getting your current location timed out. Please try again or enter the location manually.'
+              : 'I could not access your current location. Please enter an address or landmark manually.';
+      appendEReportAgentNotice(
+        locationErrorMessage,
+        { conversationId: eReportAgent.id, stage: 'location' }
+      );
+    } finally {
+      if (requestId === eReportLocationRequestRef.current) {
+        setIsFetchingEReportLocation(false);
+      }
+    }
+  };
+
+  const handleEReportPhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !eReportAgent || eReportAgent.stage !== 'photo') return;
+
+    if (!file.type.startsWith('image/')) {
+      appendEReportAgentNotice('Please choose an image file for photo evidence.', {
+        conversationId: eReportAgent.id,
+        stage: 'photo',
+      });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      appendEReportAgentNotice('That image is larger than 5 MB. Please choose a smaller photo.', {
+        conversationId: eReportAgent.id,
+        stage: 'photo',
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const imageUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      appendEReportActionTurn(
+        `Attached photo evidence: ${file.name}`,
+        attachEReportPhoto(eReportAgent, imageUrl, file.name),
+        imageUrl
+      );
+    } catch (err) {
+      console.error('Unable to read eReport photo:', err);
+      appendEReportAgentNotice('I could not read that image. Please try another photo or continue without one.', {
+        conversationId: eReportAgent.id,
+        stage: 'photo',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateEReportReview = (updates: Partial<EReportAgentState>) => {
+    setEReportAgent(prev => {
+      if (!prev || prev.stage !== 'review') return prev;
+      return { ...prev, ...updates };
+    });
+  };
+
+  const isActiveEReportReview = (message: Message): boolean =>
+    message.id === activeEReportMessageId &&
+    eReportAgent?.id === message.reportAgentPrompt?.conversationId &&
+    eReportAgent?.stage === 'review';
+
+  const handleSubmitEReportFromChat = async () => {
+    if (!eReportAgent || eReportAgent.stage !== 'review' || isSubmittingEReport) return;
+    const draft = buildEReportDraft(eReportAgent);
+    if (!draft) {
+      appendEReportAgentNotice(
+        'The draft is missing a required field. Please complete the title, description, location, and severity before submitting.',
+        { conversationId: eReportAgent.id, stage: 'review' }
+      );
+      return;
+    }
+
+    setIsSubmittingEReport(true);
+    setMessages(prev => [
+      ...prev,
+      {
+        id: `${Date.now()}-ereport-submit-user`,
+        role: 'user',
+        content: 'Submit this eReport',
+        timestamp: new Date(),
+      },
+    ]);
+
+    try {
+      const citizenName = user
+        ? [user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ')
+        : 'Authenticated Citizen';
+      const report = await submitIncidentReport({
+        category: draft.category,
+        title: draft.title.trim(),
+        description: draft.description.trim(),
+        location: draft.location.trim(),
+        severity: draft.severity,
+        imageUrl: draft.imageUrl,
+        citizenName,
+        citizenEmail: user?.email || '',
+        citizenMobile: user?.mobileNumber || '',
+      });
+
+      setEReportAgent(null);
+      setActiveEReportMessageId(null);
+      setMessages(prev => [
+        ...prev,
+        {
+          id: `${Date.now()}-ereport-submitted`,
+          role: 'assistant',
+          content: `Your eReport has been submitted successfully. Your tracking number is **${report.trackingId}**.`,
+          timestamp: new Date(),
+          submittedReport: report,
+        },
+      ]);
+    } catch (err) {
+      console.error('Unable to submit eReport from chat:', err);
+      appendEReportAgentNotice(
+        'The report could not be submitted. Your draft is still available in this chat—please review it and try again.',
+        { conversationId: eReportAgent.id, stage: 'review' }
+      );
+    } finally {
+      setIsSubmittingEReport(false);
     }
   };
 
@@ -431,6 +727,12 @@ const AIChatHome = () => {
     setMessages([]);
     setError(null);
     setInputOriginal(null);
+    setEReportAgent(null);
+    setActiveEReportMessageId(null);
+    setIsSubmittingEReport(false);
+    setManualEReportLocation('');
+    setIsFetchingEReportLocation(false);
+    eReportLocationRequestRef.current += 1;
   };
 
   // ── Voice command detection ───────────────────────────────────────────────
@@ -460,6 +762,16 @@ const AIChatHome = () => {
 
   // Fire the last actionable button in the conversation
   const triggerLastActionButton = (): boolean => {
+    if (eReportAgent) {
+      if (eReportAgent.stage === 'review') {
+        handleSubmitEReportFromChat();
+        return true;
+      }
+      // Keep active eReport answers inside the agent instead of triggering an
+      // unrelated action card from an older conversation message.
+      return false;
+    }
+
     // Walk messages in reverse to find the last assistant message with an action
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
@@ -775,9 +1087,18 @@ const AIChatHome = () => {
                         <ReactMarkdown>{message.content}</ReactMarkdown>
                       </div>
                     ) : (
-                      <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap break-words">
-                        {message.content}
-                      </p>
+                      <div className="space-y-2">
+                        <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap break-words">
+                          {message.content}
+                        </p>
+                        {message.imagePreview && (
+                          <img
+                            src={message.imagePreview}
+                            alt="Attached eReport evidence"
+                            className="max-h-48 max-w-full rounded-xl border border-white/30 object-cover"
+                          />
+                        )}
+                      </div>
                     )}
 
                     {/* 🌐 AUTO-TRANSLATION BADGE — shown on user messages that were translated */}
@@ -795,50 +1116,362 @@ const AIChatHome = () => {
                       </div>
                     )}
 
-                    {/* 🟢 AI AUTO-FILED EREPORT SUMMARY CARD */}
-                    {message.report && (
-                      <div className="mt-4 p-4 rounded-xl bg-surface-container/60 border border-primary/20 space-y-3">
+                    {/* ACTIVE EREPORT AGENT QUESTION ACTIONS */}
+                    {message.reportAgentPrompt &&
+                      message.reportAgentPrompt.stage !== 'review' &&
+                      message.id === activeEReportMessageId &&
+                      eReportAgent?.id === message.reportAgentPrompt.conversationId &&
+                      eReportAgent.stage === message.reportAgentPrompt.stage && (
+                        <div className="mt-4 p-3.5 rounded-xl bg-blue-50 border border-blue-200 space-y-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800 flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-sm">assignment</span>
+                              eReport Agent · {message.reportAgentPrompt.stage}
+                            </span>
+                            <span className="text-[10px] font-semibold text-amber-700">Draft only</span>
+                          </div>
+
+                          {message.reportAgentPrompt.stage === 'title' && message.reportAgentPrompt.suggestedTitle && (
+                            <button
+                              type="button"
+                              onClick={() => handleSend('Use the suggested title')}
+                              disabled={isLoading}
+                              className="w-full px-3 py-2.5 rounded-lg bg-white border border-blue-200 text-blue-800 font-semibold text-xs hover:bg-blue-100 disabled:opacity-50 text-left"
+                            >
+                              Use suggestion: “{message.reportAgentPrompt.suggestedTitle}”
+                            </button>
+                          )}
+
+                          {message.reportAgentPrompt.stage === 'location' && (
+                            <div className="space-y-3">
+                              <div className="space-y-1.5">
+                                <label
+                                  htmlFor={`manual-ereport-location-${message.id}`}
+                                  className="block text-[10px] font-bold uppercase tracking-wide text-blue-900"
+                                >
+                                  Option 1 · Enter location manually
+                                </label>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <input
+                                    id={`manual-ereport-location-${message.id}`}
+                                    type="text"
+                                    value={manualEReportLocation}
+                                    onChange={event => setManualEReportLocation(event.target.value.slice(0, 250))}
+                                    onKeyDown={event => {
+                                      if (event.key === 'Enter' && !isLoading && !isFetchingEReportLocation) {
+                                        event.preventDefault();
+                                        handleUseManualLocation();
+                                      }
+                                    }}
+                                    disabled={isLoading || isFetchingEReportLocation}
+                                    placeholder="Address, barangay, or nearest landmark"
+                                    className="min-w-0 flex-1 px-3 py-2.5 rounded-lg bg-white border border-blue-200 text-xs text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 disabled:opacity-50"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={handleUseManualLocation}
+                                    disabled={isLoading || isFetchingEReportLocation || manualEReportLocation.trim().length < 3}
+                                    className="px-3 py-2.5 rounded-lg bg-white border border-blue-200 text-blue-800 font-semibold text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
+                                  >
+                                    <span className="material-symbols-outlined text-base">add_location_alt</span>
+                                    Use Manual Location
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
+                                <span className="h-px flex-1 bg-blue-200" />
+                                or
+                                <span className="h-px flex-1 bg-blue-200" />
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={handleUseCurrentLocation}
+                                disabled={isLoading || isFetchingEReportLocation}
+                                className="w-full px-3 py-2.5 rounded-lg bg-primary text-white font-semibold text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
+                              >
+                                <span className={`material-symbols-outlined text-base ${isFetchingEReportLocation ? 'animate-spin' : ''}`}>
+                                  {isFetchingEReportLocation ? 'progress_activity' : 'my_location'}
+                                </span>
+                                {isFetchingEReportLocation ? 'Getting Current Location...' : 'Option 2 · Enable Current Location'}
+                              </button>
+                              <p className="text-[10px] leading-relaxed text-on-surface-variant">
+                                Your browser will ask permission. Only the coordinates are added to this editable draft, and nothing is submitted until you choose Submit eReport.
+                              </p>
+                            </div>
+                          )}
+
+                          {message.reportAgentPrompt.stage === 'severity' && (
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              {(['Low', 'Medium', 'High', 'Critical'] as const).map(level => (
+                                <button
+                                  key={level}
+                                  type="button"
+                                  onClick={() => handleSend(level)}
+                                  disabled={isLoading}
+                                  className="px-2 py-2 rounded-lg bg-white border border-blue-200 text-on-surface font-semibold text-xs hover:bg-blue-100 disabled:opacity-50"
+                                >
+                                  {level}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {message.reportAgentPrompt.stage === 'photo' && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <label className="cursor-pointer px-3 py-2.5 rounded-lg bg-primary text-white font-semibold text-xs flex items-center justify-center gap-1.5">
+                                <span className="material-symbols-outlined text-base">add_a_photo</span>
+                                Attach Photo
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleEReportPhoto}
+                                  disabled={isLoading}
+                                  className="hidden"
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => handleSend('Continue without photo')}
+                                disabled={isLoading}
+                                className="px-3 py-2.5 rounded-lg bg-white border border-blue-200 text-blue-800 font-semibold text-xs disabled:opacity-50"
+                              >
+                                Continue without photo
+                              </button>
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleSend('Cancel report')}
+                            disabled={isLoading || isFetchingEReportLocation}
+                            className="text-[11px] text-on-surface-variant hover:text-error font-semibold"
+                          >
+                            Cancel eReport draft
+                          </button>
+                        </div>
+                      )}
+
+                    {/* AI-GENERATED EREPORT DRAFT CARD */}
+                    {message.reportDraft && (
+                      <div className="mt-4 p-4 rounded-xl bg-blue-50 border border-primary/25 space-y-4">
                         <div className="flex items-center justify-between gap-2 border-b border-primary/10 pb-2">
                           <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
-                            <span className="material-symbols-outlined text-base">verified</span>
-                            <span>Official eReport Filed</span>
+                            <span className="material-symbols-outlined text-base">rate_review</span>
+                            <span>Review eReport Draft</span>
                           </div>
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                            • {message.report.status}
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                            Not submitted
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="p-2 rounded bg-white border border-outline-variant/30">
-                            <span className="text-[10px] text-on-surface-variant block">Tracking ID</span>
-                            <span className="font-mono font-bold text-primary">{message.report.trackingId}</span>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
+                            Incident Title / Summary
+                          </label>
+                          <input
+                            type="text"
+                            value={
+                              isActiveEReportReview(message)
+                                ? eReportAgent?.title || ''
+                                : message.reportDraft.title
+                            }
+                            onChange={event => updateEReportReview({ title: event.target.value.slice(0, 140) })}
+                            disabled={
+                              !isActiveEReportReview(message) ||
+                              isSubmittingEReport
+                            }
+                            className="w-full px-3 py-2.5 rounded-lg bg-white border border-outline-variant/50 text-xs font-semibold text-on-surface disabled:opacity-70"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
+                              Category
+                            </label>
+                            <select
+                              value={
+                                isActiveEReportReview(message)
+                                  ? eReportAgent?.category
+                                  : message.reportDraft.category
+                              }
+                              onChange={event => updateEReportReview({ category: event.target.value as ReportCategory })}
+                              disabled={
+                                !isActiveEReportReview(message) ||
+                                isSubmittingEReport
+                              }
+                              className="w-full px-3 py-2.5 rounded-lg bg-white border border-outline-variant/50 text-xs text-on-surface disabled:opacity-70"
+                            >
+                              {(Object.entries(categoryLabels) as Array<[ReportCategory, string]>).map(([value, label]) => (
+                                <option key={value} value={value}>{label}</option>
+                              ))}
+                            </select>
                           </div>
-                          <div className="p-2 rounded bg-white border border-outline-variant/30">
-                            <span className="text-[10px] text-on-surface-variant block">Assigned Agency</span>
-                            <span className="font-semibold text-on-surface truncate block">
-                              {message.report.agencyAssigned}
-                            </span>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
+                              Urgency / Severity
+                            </label>
+                            <select
+                              value={
+                                isActiveEReportReview(message)
+                                  ? eReportAgent?.severity || 'medium'
+                                  : message.reportDraft.severity
+                              }
+                              onChange={event => updateEReportReview({ severity: event.target.value as ReportSeverity })}
+                              disabled={
+                                !isActiveEReportReview(message) ||
+                                isSubmittingEReport
+                              }
+                              className="w-full px-3 py-2.5 rounded-lg bg-white border border-outline-variant/50 text-xs capitalize text-on-surface disabled:opacity-70"
+                            >
+                              {(['low', 'medium', 'high', 'critical'] as ReportSeverity[]).map(value => (
+                                <option key={value} value={value}>{value}</option>
+                              ))}
+                            </select>
                           </div>
                         </div>
 
-                        <div className="text-xs text-on-surface-variant space-y-1">
-                          <p>
-                            <strong>Location:</strong> {message.report.location}
-                          </p>
-                          <p>
-                            <strong>Severity:</strong>{' '}
-                            <span className="capitalize font-semibold text-amber-700">
-                              {message.report.severity} Priority
-                            </span>
-                          </p>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
+                            Specific Location / Landmark
+                          </label>
+                          <input
+                            type="text"
+                            value={
+                              isActiveEReportReview(message)
+                                ? eReportAgent?.location || ''
+                                : message.reportDraft.location
+                            }
+                            onChange={event => updateEReportReview({ location: event.target.value.slice(0, 250) })}
+                            disabled={
+                              !isActiveEReportReview(message) ||
+                              isSubmittingEReport
+                            }
+                            className="w-full px-3 py-2.5 rounded-lg bg-white border border-outline-variant/50 text-xs text-on-surface disabled:opacity-70"
+                          />
                         </div>
 
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
+                            Detailed Description
+                          </label>
+                          <textarea
+                            rows={4}
+                            value={
+                              isActiveEReportReview(message)
+                                ? eReportAgent?.description || ''
+                                : message.reportDraft.description
+                            }
+                            onChange={event => updateEReportReview({ description: event.target.value.slice(0, 2000) })}
+                            disabled={
+                              !isActiveEReportReview(message) ||
+                              isSubmittingEReport
+                            }
+                            className="w-full px-3 py-2.5 rounded-lg bg-white border border-outline-variant/50 text-xs text-on-surface resize-y disabled:opacity-70"
+                          />
+                        </div>
+
+                        {(isActiveEReportReview(message)
+                          ? eReportAgent?.imageUrl
+                          : message.reportDraft.imageUrl) && (
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
+                              Photo Evidence
+                            </label>
+                            <div className="relative w-fit">
+                              <img
+                                src={
+                                  isActiveEReportReview(message)
+                                    ? eReportAgent?.imageUrl
+                                    : message.reportDraft.imageUrl
+                                }
+                                alt="eReport evidence preview"
+                                className="h-28 max-w-full rounded-lg border border-outline-variant object-cover"
+                              />
+                              {isActiveEReportReview(message) && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateEReportReview({
+                                        imageUrl: undefined,
+                                        imageName: undefined,
+                                        photoDecision: 'skipped',
+                                      })
+                                    }
+                                    disabled={isSubmittingEReport}
+                                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-error text-white flex items-center justify-center"
+                                    title="Remove photo"
+                                  >
+                                    <span className="material-symbols-outlined text-sm">close</span>
+                                  </button>
+                                )}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="pt-2 border-t border-primary/10 space-y-2">
+                          <p className="text-[10px] text-on-surface-variant text-center">
+                            By submitting, you confirm that you reviewed the details above.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleSubmitEReportFromChat}
+                            disabled={
+                              !isActiveEReportReview(message) ||
+                              isSubmittingEReport ||
+                              !eReportAgent?.title?.trim() ||
+                              !eReportAgent?.description?.trim() ||
+                              !eReportAgent?.location?.trim()
+                            }
+                            className="w-full py-2.5 rounded-lg bg-primary text-white font-bold text-xs hover:bg-primary/90 transition-colors flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                          >
+                            <span className={`material-symbols-outlined text-sm ${isSubmittingEReport ? 'animate-spin' : ''}`}>
+                              {isSubmittingEReport ? 'progress_activity' : 'send'}
+                            </span>
+                            {isSubmittingEReport ? 'Submitting eReport...' : 'Submit eReport'}
+                          </button>
+                          {isActiveEReportReview(message) && (
+                              <button
+                                type="button"
+                                onClick={() => handleSend('Cancel report')}
+                                disabled={isSubmittingEReport}
+                                className="w-full py-1.5 text-[11px] text-on-surface-variant hover:text-error font-semibold"
+                              >
+                                Cancel draft
+                              </button>
+                            )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SUCCESSFUL IN-CHAT EREPORT SUBMISSION */}
+                    {message.submittedReport && (
+                      <div className="mt-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-3">
+                        <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
+                          <span className="material-symbols-outlined">check_circle</span>
+                          eReport Submitted
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          <div className="p-2.5 rounded-lg bg-white border border-emerald-100">
+                            <span className="text-[10px] text-on-surface-variant block">Tracking Number</span>
+                            <span className="font-mono font-bold text-emerald-800">{message.submittedReport.trackingId}</span>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-white border border-emerald-100">
+                            <span className="text-[10px] text-on-surface-variant block">Status</span>
+                            <span className="font-bold text-on-surface">{message.submittedReport.status}</span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-on-surface-variant">
+                          Assigned to: <strong>{message.submittedReport.agencyAssigned}</strong>
+                        </p>
                         <button
+                          type="button"
                           onClick={() => navigate('/ereport')}
-                          className="w-full py-2 rounded-lg bg-primary text-white font-bold text-xs hover:bg-primary/90 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                          className="w-full py-2 rounded-lg bg-emerald-700 text-white font-bold text-xs"
                         >
-                          <span className="material-symbols-outlined text-sm">travel_explore</span>
-                          Track Report Resolution Progress
+                          Open eReport Tracking
                         </button>
                       </div>
                     )}
@@ -1790,7 +2423,11 @@ const AIChatHome = () => {
               <input
                 ref={inputRef}
                 className="w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-on-surface text-sm md:text-base placeholder:text-outline/80 px-2 py-2 font-medium"
-                placeholder={placeholders[placeholderIndex]}
+                placeholder={
+                  eReportAgent
+                    ? EREPORT_AGENT_PLACEHOLDERS[eReportAgent.stage]
+                    : placeholders[placeholderIndex]
+                }
                 type="text"
                 value={inputValue}
                 onChange={e => {
@@ -1798,7 +2435,7 @@ const AIChatHome = () => {
                   setInputValue(e.target.value);
                 }}
                 onKeyDown={e => e.key === 'Enter' && !isLoading && handleSend()}
-                disabled={isLoading}
+                disabled={isLoading || isFetchingEReportLocation}
               />
               {/* Translation hint — shows original Filipino text below input */}
               {inputOriginal && !isTranslatingInput && (
@@ -1820,7 +2457,7 @@ const AIChatHome = () => {
             <button
               type="button"
               onClick={startVoiceInput}
-              disabled={isLoading}
+              disabled={isLoading || isFetchingEReportLocation}
               className={`w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full transition-all duration-200 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
                 isListening
                   ? 'bg-red-500 text-white shadow-lg shadow-red-200 animate-pulse'
@@ -1847,7 +2484,7 @@ const AIChatHome = () => {
             <button
               type="button"
               onClick={() => handleSend()}
-              disabled={isLoading || !inputValue.trim()}
+              disabled={isLoading || isFetchingEReportLocation || !inputValue.trim()}
               className="w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full bg-primary text-white shadow-md hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed shrink-0"
               title="Send Message"
             >

@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import {
+  AiReportDraft,
   IncidentReport,
   ReportCategory,
   ReportSeverity,
   categoryLabels,
+  clearPendingAiReportDraft,
+  generateAiReportDraft,
+  getPendingAiReportDraft,
+  saveAiReportDraft,
   getUserReports,
   submitIncidentReport,
   getReportByTrackingId,
@@ -21,6 +26,13 @@ const EReportPage = () => {
   const [location, setLocation] = useState('')
   const [severity, setSeverity] = useState<ReportSeverity>('medium')
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+
+  // AI-assisted draft state. Generated reports remain drafts until form submission.
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false)
+  const [aiDraftError, setAiDraftError] = useState<string | null>(null)
+  const [aiDraftActive, setAiDraftActive] = useState(false)
+  const [draftSourcePrompt, setDraftSourcePrompt] = useState('')
   
   // Submission & List States
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -33,6 +45,20 @@ const EReportPage = () => {
 
   useEffect(() => {
     loadReports()
+
+    const pendingDraft = getPendingAiReportDraft()
+    if (pendingDraft) {
+      setCategory(pendingDraft.category)
+      setTitle(pendingDraft.title)
+      setDescription(pendingDraft.description)
+      setLocation(pendingDraft.location)
+      setSeverity(pendingDraft.severity)
+      setImagePreview(pendingDraft.imageUrl || null)
+      setDraftSourcePrompt(pendingDraft.sourcePrompt)
+      setAiPrompt(pendingDraft.sourcePrompt)
+      setAiDraftActive(true)
+      setActiveTab('submit')
+    }
   }, [])
 
   const loadReports = async () => {
@@ -49,6 +75,49 @@ const EReportPage = () => {
       }
       reader.readAsDataURL(file)
     }
+  }
+
+  const applyAiDraft = (draft: AiReportDraft) => {
+    saveAiReportDraft(draft)
+    setCategory(draft.category)
+    setTitle(draft.title)
+    setDescription(draft.description)
+    setLocation(draft.location)
+    setSeverity(draft.severity)
+    setImagePreview(draft.imageUrl || null)
+    setDraftSourcePrompt(draft.sourcePrompt)
+    setAiDraftActive(true)
+    setActiveTab('submit')
+  }
+
+  const handleGenerateAiDraft = async () => {
+    const prompt = aiPrompt.trim()
+    if (!prompt || isGeneratingDraft) return
+
+    setIsGeneratingDraft(true)
+    setAiDraftError(null)
+    try {
+      const draft = await generateAiReportDraft(prompt, user)
+      applyAiDraft(draft)
+    } catch (err) {
+      console.error('Error generating AI eReport draft:', err)
+      setAiDraftError('The AI could not generate a draft right now. You can retry or continue with the manual form.')
+    } finally {
+      setIsGeneratingDraft(false)
+    }
+  }
+
+  const handleStartManualReport = () => {
+    clearPendingAiReportDraft()
+    setAiDraftActive(false)
+    setDraftSourcePrompt('')
+    setAiDraftError(null)
+    setCategory('infrastructure')
+    setTitle('')
+    setDescription('')
+    setLocation('')
+    setSeverity('medium')
+    setImagePreview(null)
   }
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -77,6 +146,9 @@ const EReportPage = () => {
       })
 
       setSubmittedReport(report)
+      clearPendingAiReportDraft()
+      setAiDraftActive(false)
+      setDraftSourcePrompt('')
       await loadReports()
 
       // Reset form
@@ -186,7 +258,98 @@ const EReportPage = () => {
 
       {/* TAB 1: SUBMIT REPORT */}
       {activeTab === 'submit' && (
-        <form onSubmit={handleFormSubmit} className="space-y-6">
+        <div className="space-y-6">
+          {/* Optional AI drafting assistant. The manual form remains available below. */}
+          <section className="rounded-3xl overflow-hidden border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-blue-50 shadow-sm">
+            <div className="p-5 md:p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-600 to-primary text-white flex items-center justify-center shadow-md shrink-0">
+                    <span className="material-symbols-outlined">auto_awesome</span>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="font-bold text-on-surface">Create an eReport with AI</h2>
+                      <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 text-[10px] font-bold uppercase tracking-wide">
+                        Draft only
+                      </span>
+                    </div>
+                    <p className="text-xs text-on-surface-variant mt-1 max-w-2xl">
+                      Describe what happened in your own words. AI will fill the form, but it will not submit anything until you review the fields and press the final submit button.
+                    </p>
+                  </div>
+                </div>
+                {aiDraftActive && (
+                  <button
+                    type="button"
+                    onClick={handleStartManualReport}
+                    className="text-xs font-semibold text-primary hover:underline whitespace-nowrap"
+                  >
+                    Start blank manual form
+                  </button>
+                )}
+              </div>
+
+              <textarea
+                rows={3}
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="Example: Create a report about an uncollected garbage pile blocking the sidewalk near Barangay Hall in Pasig for four days."
+                className="w-full px-4 py-3 rounded-2xl border border-violet-200 bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-200 outline-none text-sm resize-y"
+              />
+
+              {aiDraftError && (
+                <p className="text-xs text-error flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base">error</span>
+                  {aiDraftError}
+                </p>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  onClick={() => setAiPrompt('Create an eReport about a broken streetlight making the intersection unsafe near our barangay hall.')}
+                  className="text-xs text-violet-700 font-semibold hover:underline text-left"
+                >
+                  Use a sample prompt
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGenerateAiDraft}
+                  disabled={isGeneratingDraft || !aiPrompt.trim()}
+                  className="px-5 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-primary text-white font-bold text-sm shadow-md hover:opacity-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <span className={`material-symbols-outlined text-lg ${isGeneratingDraft ? 'animate-spin' : ''}`}>
+                    {isGeneratingDraft ? 'progress_activity' : 'auto_awesome'}
+                  </span>
+                  {isGeneratingDraft ? 'AI is drafting your report...' : 'Generate Editable Draft'}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <form onSubmit={handleFormSubmit} className="space-y-6">
+            {aiDraftActive && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <span className="material-symbols-outlined text-amber-700">rate_review</span>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-bold text-sm text-amber-950">AI draft ready for your review</h3>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-bold">Not submitted</span>
+                    </div>
+                    <p className="text-xs text-amber-900/80 mt-1">
+                      Every field below is editable. Correct missing or inaccurate details before your final submission.
+                    </p>
+                    {draftSourcePrompt && (
+                      <p className="text-[11px] text-amber-900/70 mt-2 line-clamp-2">
+                        <strong>Created from:</strong> “{draftSourcePrompt}”
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
           {/* Category Selector Cards */}
           <div className="space-y-3">
@@ -200,7 +363,8 @@ const EReportPage = () => {
                 { id: 'sanitation', label: 'Waste & Sanitation', icon: 'delete_sweep', desc: 'Garbage, drainage clog, sewage' },
                 { id: 'traffic', label: 'Traffic & Transport', icon: 'traffic', desc: 'Signals, illegal parking, blockage' },
                 { id: 'emergency', label: 'Disaster / Emergency', icon: 'warning', desc: 'Floods, landslides, fallen trees' },
-                { id: 'corruption', label: 'Public Integrity', icon: 'gavel', desc: 'Service delays, red tape, concern' }
+                { id: 'corruption', label: 'Public Integrity', icon: 'gavel', desc: 'Service delays, red tape, concern' },
+                { id: 'other', label: 'Other Concern', icon: 'description', desc: 'Other community or public issue' }
               ].map(cat => (
                 <div
                   key={cat.id}
@@ -245,7 +409,7 @@ const EReportPage = () => {
 
             {/* Location */}
             <div>
-              <label className="block text-sm font-bold text-on-surface mb-1.5 flex items-center justify-between">
+              <label className="text-sm font-bold text-on-surface mb-1.5 flex items-center justify-between">
                 <span>3. Specific Location / Landmark <span className="text-error">*</span></span>
                 <button
                   type="button"
@@ -355,12 +519,17 @@ const EReportPage = () => {
               className="w-full py-4 rounded-xl bg-primary text-white font-bold text-sm shadow-lg hover:bg-primary/90 active:scale-98 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <span className="material-symbols-outlined text-xl">send</span>
-              {isSubmitting ? 'Submitting to eReport API...' : 'Submit Incident Report'}
+              {isSubmitting
+                ? 'Submitting to eReport API...'
+                : aiDraftActive
+                  ? 'Review Complete — Submit Incident Report'
+                  : 'Submit Incident Report'}
             </button>
 
           </div>
 
-        </form>
+          </form>
+        </div>
       )}
 
       {/* TAB 2: TRACK REPORTS */}
