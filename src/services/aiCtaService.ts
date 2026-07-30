@@ -313,8 +313,8 @@ export const detectCtaAction = (
   else if (combinedText.includes('sss') || combinedText.includes('social security')) {
     action = {
       actionType: 'sss_services',
-      ctaLabel: 'Pay SSS Contribution / Verify Record',
-      ctaDescription: 'Secured via PhilSys eVerify & eGovPay',
+      ctaLabel: 'Start SSS Service in Chat',
+      ctaDescription: 'Guided in chat, secured via PhilSys eVerify and eGovPay',
       icon: 'shield_person',
       colorTheme: 'primary',
       preFilled,
@@ -371,8 +371,8 @@ export const detectCtaAction = (
   else if (containsAny(combinedText, SSS_KEYWORDS)) {
     action = {
       actionType: 'sss_contribution',
-      ctaLabel: 'Proceed to SSS Services',
-      ctaDescription: 'Manage contributions with your verified account',
+      ctaLabel: 'Start SSS Service in Chat',
+      ctaDescription: 'Complete the guided SSS transaction without leaving chat',
       icon: 'shield_person',
       colorTheme: 'secondary',
       preFilled,

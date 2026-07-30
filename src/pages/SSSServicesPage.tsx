@@ -8,71 +8,16 @@ import {
   sendPaymentConfirmation,
   sendApplicationConfirmation,
 } from '../services/eMessageService'
+import {
+  SSS_APPLICABLE_PERIODS,
+  SSS_MEMBERSHIP_TYPES,
+  SSS_SERVICES,
+  SSSServiceConfig,
+} from '../services/sssService'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type SSSServiceType = 'contribution' | 'salary_loan' | 'record_verification'
 type WizardStep = 'select' | 'verify' | 'details' | 'payment' | 'success'
-
-interface SSSServiceConfig {
-  id: SSSServiceType
-  icon: string
-  title: string
-  subtitle: string
-  agency: string
-  defaultFees: FeeItem[]
-  color: string
-  bgColor: string
-}
-
-const configuredRecordVerificationFee = Number(
-  import.meta.env.VITE_SSS_RECORD_VERIFICATION_FEE ?? 1
-)
-const RECORD_VERIFICATION_FEE =
-  Number.isFinite(configuredRecordVerificationFee) && configuredRecordVerificationFee > 0
-    ? configuredRecordVerificationFee
-    : 1
-
-const SSS_SERVICES: SSSServiceConfig[] = [
-  {
-    id: 'contribution',
-    icon: 'payments',
-    title: 'SSS Voluntary Contribution',
-    subtitle: 'Pay monthly or quarterly contributions as Voluntary/Self-Employed/OFW',
-    agency: 'Social Security System (SSS)',
-    defaultFees: [
-      { label: 'SSS Monthly Contribution (MSC ₱10,000)', amount: 1400 },
-      { label: 'Workers\' Investment & Savings Program (WISP)', amount: 150 },
-    ],
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50 border-blue-200',
-  },
-  {
-    id: 'salary_loan',
-    icon: 'account_balance',
-    title: 'Salary Loan Amortization',
-    subtitle: 'Pay your monthly SSS Salary Loan balance or apply for new loan',
-    agency: 'Social Security System (SSS)',
-    defaultFees: [
-      { label: 'SSS Salary Loan Monthly Amortization', amount: 1850 },
-      { label: 'Processing Fee', amount: 50 },
-    ],
-    color: 'text-indigo-600',
-    bgColor: 'bg-indigo-50 border-indigo-200',
-  },
-  {
-    id: 'record_verification',
-    icon: 'verified_user',
-    title: 'SSS Member Record Verification',
-    subtitle: 'Verify & link your SSS CRN with your PhilSys National ID via eVerify',
-    agency: 'Social Security System (SSS)',
-    defaultFees: [
-      { label: 'Identity Verification & Sync Fee (eGovPay Test Mode)', amount: RECORD_VERIFICATION_FEE },
-    ],
-    color: 'text-emerald-600',
-    bgColor: 'bg-emerald-50 border-emerald-200',
-  },
-]
 
 const STEPS: WizardStep[] = ['select', 'verify', 'details', 'payment', 'success']
 const STEP_LABELS: Record<WizardStep, string> = {
@@ -98,8 +43,8 @@ const SSSServicesPage = () => {
   // Step 3 — Details
   const [sssNumber, setSssNumber] = useState('')
   const [prn, setPrn] = useState('')
-  const [applicablePeriod, setApplicablePeriod] = useState('Current Month (July 2026)')
-  const [membershipType, setMembershipType] = useState('Voluntary / Self-Employed')
+  const [applicablePeriod, setApplicablePeriod] = useState(SSS_APPLICABLE_PERIODS[0])
+  const [membershipType, setMembershipType] = useState(SSS_MEMBERSHIP_TYPES[0])
   const [fees, setFees] = useState<FeeItem[]>([])
 
   // Step 4 — Payment
@@ -418,9 +363,7 @@ const SSSServicesPage = () => {
                       onChange={e => setMembershipType(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant focus:border-blue-600 outline-none bg-white"
                     >
-                      <option>Voluntary / Self-Employed</option>
-                      <option>OFW (Overseas Filipino Worker)</option>
-                      <option>Non-Working Spouse</option>
+                      {SSS_MEMBERSHIP_TYPES.map(type => <option key={type}>{type}</option>)}
                     </select>
                   </div>
                   <div>
@@ -430,9 +373,7 @@ const SSSServicesPage = () => {
                       onChange={e => setApplicablePeriod(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant focus:border-blue-600 outline-none bg-white"
                     >
-                      <option>Current Month (July 2026)</option>
-                      <option>Q3 2026 (July - September)</option>
-                      <option>Q4 2026 (October - December)</option>
+                      {SSS_APPLICABLE_PERIODS.map(period => <option key={period}>{period}</option>)}
                     </select>
                   </div>
                 </div>

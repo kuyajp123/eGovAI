@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useNavigate } from 'react-router-dom';
+import {
+  SSSAgentPromptCard,
+  SSSPaymentCard,
+  SSSTransactionReviewCard,
+} from '../components/SSSAgentCards';
 import { useAuth } from '../context/AuthContext';
 import { AiBusinessAction, processAiBusinessIntent } from '../services/aiBusinessService';
 import { CtaAction, detectCtaAction } from '../services/aiCtaService';
 import { IdentityCardData, processAiIdentityIntent } from '../services/aiIdentityService';
 import { TransparencyResult, processTransparencyIntent } from '../services/aiTransparencyService';
 import { generateAIResponse, generateSpeech, translateText } from '../services/egovService';
+import { PaymentIntent, createPaymentIntent } from '../services/eGovPayService';
+import { sendVerificationConfirmation } from '../services/eMessageService';
+import { triggerEVerifyLivenessSDK, verifyIdentity } from '../services/eVerifyService';
 import {
   AiReportDraft,
   IncidentReport,
@@ -27,6 +35,18 @@ import {
   startEReportAgent,
   useEReportLocation,
 } from '../services/aiEReportAgentService';
+import {
+  SSSAgentPrompt,
+  SSSAgentState,
+  SSSAgentTurn,
+  SSSTransactionDraft,
+  buildSSSTransactionDraft,
+  continueSSSAgent,
+  isSSSAgentIntent,
+  markSSSIdentityVerified,
+  markSSSPaymentCreated,
+  startSSSAgent,
+} from '../services/aiSSSAgentService';
 
 interface Message {
   id: string;
@@ -38,6 +58,10 @@ interface Message {
   reportAgentPrompt?: EReportAgentPrompt;
   submittedReport?: IncidentReport;
   imagePreview?: string;
+  sssAgentPrompt?: SSSAgentPrompt;
+  sssStateSnapshot?: SSSAgentState;
+  sssDraft?: SSSTransactionDraft;
+  sssPaymentIntent?: PaymentIntent;
   businessAction?: AiBusinessAction;
   identityCard?: IdentityCardData;
   ctaAction?: CtaAction;
@@ -56,6 +80,20 @@ const EREPORT_AGENT_PLACEHOLDERS: Record<EReportAgentState['stage'], string> = {
   photo: 'Use the photo buttons, or type “skip photo”...',
   review: 'Edit the review card, or tell me what to change...',
 };
+
+const SSS_AGENT_PLACEHOLDERS: Record<SSSAgentState['stage'], string> = {
+  service: 'Choose an SSS service...',
+  identity: 'Use Verify Identity to continue...',
+  sss_number: 'Enter your 10-digit SSS number or 12-digit CRN...',
+  membership: 'Choose your SSS membership type...',
+  period: 'Choose the contribution payment period...',
+  prn: 'Enter your SSS PRN or loan account number...',
+  review: 'Edit the SSS review card, or tell me what to change...',
+  payment: 'Open the eGovPay link above, or cancel the SSS agent...',
+};
+
+const isSSSCtaAction = (action?: CtaAction): boolean =>
+  action?.actionType === 'sss_services' || action?.actionType === 'sss_contribution';
 
 // ── Language detection helper ─────────────────────────────────────────────────
 // Detects Filipino/Tagalog and other non-English languages using common function
@@ -109,6 +147,11 @@ const AIChatHome = () => {
   const [manualEReportLocation, setManualEReportLocation] = useState('');
   const [isFetchingEReportLocation, setIsFetchingEReportLocation] = useState(false);
   const eReportLocationRequestRef = useRef(0);
+  const [sssAgent, setSSSAgent] = useState<SSSAgentState | null>(null);
+  const [activeSSSMessageId, setActiveSSSMessageId] = useState<string | null>(null);
+  const [isVerifyingSSS, setIsVerifyingSSS] = useState(false);
+  const [isCreatingSSSPayment, setIsCreatingSSSPayment] = useState(false);
+  const sssOperationRequestRef = useRef(0);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
 
@@ -254,9 +297,201 @@ const AIChatHome = () => {
     setMessages(prev => [...prev, assistantMessage]);
   };
 
+  const appendSSSAgentTurn = (turn: SSSAgentTurn) => {
+    setSSSAgent(turn.state);
+    const messageId = `${Date.now()}-sss-agent`;
+    setActiveSSSMessageId(turn.state && turn.prompt ? messageId : null);
+    const assistantMessage: Message = {
+      id: messageId,
+      role: 'assistant',
+      content: turn.reply,
+      timestamp: new Date(),
+      sssAgentPrompt: turn.prompt,
+      sssStateSnapshot: turn.state ? { ...turn.state } : undefined,
+      sssDraft: turn.draft,
+      sssPaymentIntent: turn.paymentIntent,
+    };
+    setMessages(prev => [...prev, assistantMessage]);
+  };
+
+  const appendSSSAgentActionTurn = (userContent: string, turn: SSSAgentTurn) => {
+    const now = Date.now();
+    const assistantMessageId = `${now}-sss-action-assistant`;
+    setSSSAgent(turn.state);
+    setActiveSSSMessageId(turn.state && turn.prompt ? assistantMessageId : null);
+    setMessages(prev => [
+      ...prev,
+      {
+        id: `${now}-sss-action-user`,
+        role: 'user',
+        content: userContent,
+        timestamp: new Date(),
+      },
+      {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: turn.reply,
+        timestamp: new Date(),
+        sssAgentPrompt: turn.prompt,
+        sssStateSnapshot: turn.state ? { ...turn.state } : undefined,
+        sssDraft: turn.draft,
+        sssPaymentIntent: turn.paymentIntent,
+      },
+    ]);
+  };
+
+  const appendSSSAgentNotice = (content: string, prompt?: SSSAgentPrompt) => {
+    const messageId = `${Date.now()}-sss-notice`;
+    if (prompt) setActiveSSSMessageId(messageId);
+    const reviewState = prompt?.stage === 'review' && sssAgent ? { ...sssAgent } : undefined;
+    setMessages(prev => [
+      ...prev,
+      {
+        id: messageId,
+        role: 'assistant',
+        content,
+        timestamp: new Date(),
+        sssAgentPrompt: prompt,
+        sssStateSnapshot: reviewState,
+        sssDraft: reviewState ? buildSSSTransactionDraft(reviewState) || undefined : undefined,
+      },
+    ]);
+  };
+
+  const handleVerifySSSIdentity = async () => {
+    if (!sssAgent || sssAgent.stage !== 'identity' || isVerifyingSSS) return;
+    const requestId = ++sssOperationRequestRef.current;
+    setIsVerifyingSSS(true);
+
+    try {
+      let livenessSessionId = '';
+      try {
+        livenessSessionId = await triggerEVerifyLivenessSDK();
+      } catch (sdkError) {
+        console.warn('SSS chat eVerify Web SDK popup error or cancelled:', sdkError);
+        livenessSessionId = localStorage.getItem('egov_liveness_token') || '';
+      }
+
+      if (!livenessSessionId) {
+        throw new Error('Face Liveness Session Required: complete the camera verification to continue.');
+      }
+
+      const result = await verifyIdentity({
+        firstName: user?.firstName || 'Citizen',
+        middleName: user?.middleName || '',
+        lastName: user?.lastName || '',
+        suffix: user?.suffix || '',
+        birthDate: user?.birthdate || '1990-01-01',
+        faceLivenessSessionId: livenessSessionId,
+      });
+      if (requestId !== sssOperationRequestRef.current) return;
+      if (!result.verified) throw new Error(result.message || 'PhilSys identity verification was not successful.');
+
+      if (user?.mobileNumber) {
+        try {
+          await sendVerificationConfirmation(user.mobileNumber, user.firstName || 'Citizen');
+        } catch (notificationError) {
+          console.warn('SSS verification SMS could not be sent:', notificationError);
+        }
+      }
+
+      appendSSSAgentActionTurn(
+        'Complete PhilSys eVerify identity verification',
+        markSSSIdentityVerified(sssAgent, {
+          verificationId: result.verificationId,
+          citizenName: result.citizenName,
+          verifiedAt: result.verifiedAt,
+        })
+      );
+    } catch (verificationError) {
+      if (requestId !== sssOperationRequestRef.current) return;
+      const message = verificationError instanceof Error
+        ? verificationError.message
+        : 'Identity verification failed. Please try again.';
+      appendSSSAgentNotice(`SSS identity verification was not completed: ${message}`, {
+        conversationId: sssAgent.id,
+        stage: 'identity',
+      });
+    } finally {
+      if (requestId === sssOperationRequestRef.current) setIsVerifyingSSS(false);
+    }
+  };
+
+  const updateSSSReview = (updates: Partial<SSSAgentState>) => {
+    if (!sssAgent || sssAgent.stage !== 'review') return;
+    const updated = { ...sssAgent, ...updates };
+    setSSSAgent(updated);
+    setMessages(prev =>
+      prev.map(message =>
+        message.id === activeSSSMessageId
+          ? {
+              ...message,
+              sssStateSnapshot: { ...updated },
+              sssDraft: buildSSSTransactionDraft(updated) || message.sssDraft,
+            }
+          : message
+      )
+    );
+  };
+
+  const isActiveSSSReview = (message: Message): boolean =>
+    message.id === activeSSSMessageId &&
+    sssAgent?.id === message.sssAgentPrompt?.conversationId &&
+    sssAgent?.stage === 'review';
+
+  const handleCreateSSSPayment = async () => {
+    if (!sssAgent || sssAgent.stage !== 'review' || isCreatingSSSPayment) return;
+    const draft = buildSSSTransactionDraft(sssAgent);
+    if (!draft) {
+      appendSSSAgentNotice(
+        'The SSS draft contains a missing or invalid field. Review the SSS number / CRN and any required PRN before continuing.',
+        { conversationId: sssAgent.id, stage: 'review' }
+      );
+      return;
+    }
+
+    const requestId = ++sssOperationRequestRef.current;
+    setIsCreatingSSSPayment(true);
+    try {
+      const citizenName = user
+        ? [user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ')
+        : 'Citizen';
+      const paymentIntent = await createPaymentIntent({
+        amount: draft.totalAmount,
+        description: `${draft.serviceTitle} — ${citizenName}`,
+        citizenName,
+        citizenEmail: user?.email,
+        citizenMobile: user?.mobileNumber,
+        items: draft.fees.map(fee => ({ name: fee.label, amount: fee.amount })),
+      });
+      if (requestId !== sssOperationRequestRef.current) return;
+
+      appendSSSAgentActionTurn(
+        'Confirm this SSS draft and create an eGovPay payment link',
+        markSSSPaymentCreated(sssAgent, paymentIntent)
+      );
+    } catch (paymentError) {
+      if (requestId !== sssOperationRequestRef.current) return;
+      const message = paymentError instanceof Error
+        ? paymentError.message
+        : 'Unable to create the eGovPay transaction link.';
+      appendSSSAgentNotice(`The eGovPay link could not be created: ${message}`, {
+        conversationId: sssAgent.id,
+        stage: 'review',
+      });
+    } finally {
+      if (requestId === sssOperationRequestRef.current) setIsCreatingSSSPayment(false);
+    }
+  };
+
+  const handleStartAnotherSSS = () => {
+    const turn = startSSSAgent('Start SSS services in chat');
+    appendSSSAgentActionTurn('Start another SSS transaction', turn);
+  };
+
   const handleSend = async (messageText?: string, suppressCta = false) => {
     const text = messageText || inputValue.trim();
-    if (!text || isLoading || isFetchingEReportLocation) return;
+    if (!text || isLoading || isFetchingEReportLocation || isVerifyingSSS || isCreatingSSSPayment) return;
 
     setError(null);
     setInputValue('');
@@ -307,6 +542,14 @@ const AIChatHome = () => {
         return;
       }
 
+      // Keep an active SSS transaction inside its own agent until it is cancelled
+      // or handed off to the official eGovPay checkout.
+      if (sssAgent) {
+        const turn = continueSSSAgent(sssAgent, processText);
+        appendSSSAgentTurn(turn);
+        return;
+      }
+
       // Broad help requests stay conversational until the citizen identifies a need.
       if (isGeneralHelpRequest(processText)) {
         const assistantMessage: Message = {
@@ -324,6 +567,13 @@ const AIChatHome = () => {
       if (isEReportAgentIntent(processText)) {
         const turn = await startEReportAgent(processText);
         appendEReportAgentTurn(turn);
+        return;
+      }
+
+      // Actionable SSS requests use the in-chat agent. Informational SSS
+      // questions continue to the normal assistant below.
+      if (isSSSAgentIntent(processText)) {
+        appendSSSAgentTurn(startSSSAgent(processText));
         return;
       }
 
@@ -733,6 +983,11 @@ const AIChatHome = () => {
     setManualEReportLocation('');
     setIsFetchingEReportLocation(false);
     eReportLocationRequestRef.current += 1;
+    setSSSAgent(null);
+    setActiveSSSMessageId(null);
+    setIsVerifyingSSS(false);
+    setIsCreatingSSSPayment(false);
+    sssOperationRequestRef.current += 1;
   };
 
   // ── Voice command detection ───────────────────────────────────────────────
@@ -772,6 +1027,20 @@ const AIChatHome = () => {
       return false;
     }
 
+    if (sssAgent) {
+      if (sssAgent.stage === 'identity') {
+        handleVerifySSSIdentity();
+        return true;
+      }
+      if (sssAgent.stage === 'review') {
+        handleCreateSSSPayment();
+        return true;
+      }
+      // Never infer a service choice, SSS number, PRN, or paid status from a
+      // generic voice confirmation.
+      return false;
+    }
+
     // Walk messages in reverse to find the last assistant message with an action
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
@@ -796,7 +1065,9 @@ const AIChatHome = () => {
         confirmUtterance.lang = 'en-PH';
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(confirmUtterance);
-        if (msg.ctaAction.targetRoute) {
+        if (isSSSCtaAction(msg.ctaAction)) {
+          confirmUtterance.onend = () => handleSuggestionClick('Start SSS services in chat', true);
+        } else if (msg.ctaAction.targetRoute) {
           confirmUtterance.onend = () => navigate(msg.ctaAction!.targetRoute!);
         } else {
           confirmUtterance.onend = () =>
@@ -1474,6 +1745,47 @@ const AIChatHome = () => {
                           Open eReport Tracking
                         </button>
                       </div>
+                    )}
+
+                    {/* ACTIVE IN-CHAT SSS AGENT */}
+                    {message.sssAgentPrompt &&
+                      message.sssAgentPrompt.stage !== 'review' &&
+                      message.id === activeSSSMessageId &&
+                      sssAgent?.id === message.sssAgentPrompt.conversationId &&
+                      sssAgent.stage === message.sssAgentPrompt.stage && (
+                        <SSSAgentPromptCard
+                          prompt={message.sssAgentPrompt}
+                          citizenName={
+                            user
+                              ? [user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ')
+                              : 'Authenticated Citizen'
+                          }
+                          busy={isLoading || isVerifyingSSS || isCreatingSSSPayment}
+                          onReply={reply => handleSend(reply)}
+                          onVerifyIdentity={handleVerifySSSIdentity}
+                          onCancel={() => handleSend('Cancel SSS transaction')}
+                        />
+                      )}
+
+                    {/* EDITABLE SSS REVIEW CARD */}
+                    {message.sssAgentPrompt?.stage === 'review' && message.sssDraft && message.sssStateSnapshot && (
+                      <SSSTransactionReviewCard
+                        state={isActiveSSSReview(message) && sssAgent ? sssAgent : message.sssStateSnapshot}
+                        active={isActiveSSSReview(message)}
+                        busy={isCreatingSSSPayment}
+                        onUpdate={updateSSSReview}
+                        onConfirm={handleCreateSSSPayment}
+                        onCancel={() => handleSend('Cancel SSS transaction')}
+                      />
+                    )}
+
+                    {/* PENDING EGOVPAY HANDOFF — PAYMENT ONLY OCCURS ON HOSTED PAGE */}
+                    {message.sssPaymentIntent && message.sssDraft && (
+                      <SSSPaymentCard
+                        draft={message.sssDraft}
+                        paymentIntent={message.sssPaymentIntent}
+                        onStartAnother={handleStartAnotherSSS}
+                      />
                     )}
 
                     {/* ⚖️ LAWS & REGULATIONS CTA CARD */}
@@ -2268,7 +2580,9 @@ const AIChatHome = () => {
                           {/* CTA Button */}
                           <button
                             onClick={() => {
-                              if (message.ctaAction?.targetRoute) {
+                              if (isSSSCtaAction(message.ctaAction)) {
+                                handleSuggestionClick('Start SSS services in chat', true);
+                              } else if (message.ctaAction?.targetRoute) {
                                 navigate(message.ctaAction.targetRoute);
                               } else {
                                 // Pre-fill the input to trigger the business flow — suppress CTA so it doesn't loop
@@ -2426,6 +2740,8 @@ const AIChatHome = () => {
                 placeholder={
                   eReportAgent
                     ? EREPORT_AGENT_PLACEHOLDERS[eReportAgent.stage]
+                    : sssAgent
+                      ? SSS_AGENT_PLACEHOLDERS[sssAgent.stage]
                     : placeholders[placeholderIndex]
                 }
                 type="text"
@@ -2435,7 +2751,7 @@ const AIChatHome = () => {
                   setInputValue(e.target.value);
                 }}
                 onKeyDown={e => e.key === 'Enter' && !isLoading && handleSend()}
-                disabled={isLoading || isFetchingEReportLocation}
+                disabled={isLoading || isFetchingEReportLocation || isVerifyingSSS || isCreatingSSSPayment}
               />
               {/* Translation hint — shows original Filipino text below input */}
               {inputOriginal && !isTranslatingInput && (
@@ -2457,7 +2773,7 @@ const AIChatHome = () => {
             <button
               type="button"
               onClick={startVoiceInput}
-              disabled={isLoading || isFetchingEReportLocation}
+              disabled={isLoading || isFetchingEReportLocation || isVerifyingSSS || isCreatingSSSPayment}
               className={`w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full transition-all duration-200 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
                 isListening
                   ? 'bg-red-500 text-white shadow-lg shadow-red-200 animate-pulse'
@@ -2484,7 +2800,13 @@ const AIChatHome = () => {
             <button
               type="button"
               onClick={() => handleSend()}
-              disabled={isLoading || isFetchingEReportLocation || !inputValue.trim()}
+              disabled={
+                isLoading ||
+                isFetchingEReportLocation ||
+                isVerifyingSSS ||
+                isCreatingSSSPayment ||
+                !inputValue.trim()
+              }
               className="w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full bg-primary text-white shadow-md hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed shrink-0"
               title="Send Message"
             >
