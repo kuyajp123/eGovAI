@@ -47,16 +47,6 @@ const WelcomePage = () => {
               className="w-full h-full p-6 md:p-8"
               alt="eBuddy, the eGovPH AI assistant mascot"
             />
-            {/* Decorative Floating Element 1: Verification Badge */}
-            <div className="absolute top-6 right-6 glass-effect p-4 rounded-xl shadow-lg flex items-center gap-3 animate-bounce shadow-primary/10" style={{ animationDuration: '4s' }}>
-              <div className="w-10 h-10 bg-tertiary rounded-full flex items-center justify-center text-white">
-                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
-              </div>
-              <div>
-                <p className="font-label-sm text-[12px] text-on-surface-variant">Identity Secured</p>
-                <p className="font-title-lg text-[14px] text-on-surface font-bold">Encrypted</p>
-              </div>
-            </div>
             {/* Decorative Floating Element 2: Stats */}
             <div className="absolute bottom-6 left-6 glass-effect p-4 rounded-xl shadow-lg flex flex-col gap-1">
               <div className="flex gap-1">

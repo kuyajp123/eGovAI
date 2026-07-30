@@ -25,7 +25,6 @@ const IDRegistration = () => {
 <section className="mb-10 text-center">
 <div className="inline-flex items-center gap-2 bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full mb-4">
 <span className="material-symbols-outlined text-[18px]" data-icon="verified_user" style={{fontVariationSettings: "'FILL' 1",}}>verified_user</span>
-<span className="font-label-sm">Identity Secured &amp; Encrypted</span>
 </div>
 <h2 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-2">Verify your identity</h2>
 <p className="font-body-md text-on-surface-variant max-w-md mx-auto">Please choose a method to confirm your identity. This process is encrypted and never shared with third parties.</p>
