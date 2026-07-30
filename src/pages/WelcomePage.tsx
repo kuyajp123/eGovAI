@@ -16,7 +16,7 @@ const WelcomePage = () => {
   }, [isAuthenticated, navigate])
 
   return (
-    <div className="pt-24 pb-12 px-margin-mobile flex flex-col items-center max-w-screen-xl mx-auto">
+    <div className="px-margin-mobile md:px-8 py-8 md:py-12 flex flex-col items-center max-w-screen-xl mx-auto w-full">
       <section className="w-full flex flex-col md:flex-row items-center justify-between gap-12 mb-16">
         <div className="flex-1 space-y-6 text-center md:text-left">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-surface-container-low rounded-full border border-outline-variant/30">

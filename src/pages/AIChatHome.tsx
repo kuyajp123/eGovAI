@@ -3626,37 +3626,72 @@ const AIChatHome = () => {
         )}
       </main>
 
-      {/* 🟢 FIXED & ENHANCED CHAT INPUT SHELL (Always positioned above BottomNav) */}
-      <div className="fixed bottom-[76px] left-0 right-0 z-40 px-4 md:px-6 pointer-events-none">
-        <div className="max-w-3xl mx-auto pointer-events-auto">
-          <div className="bg-white/95 backdrop-blur-xl p-2 md:p-3 rounded-3xl shadow-2xl border-2 border-primary/20 hover:border-primary/50 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10 transition-all duration-300 flex items-center gap-2">
-            {/* Action / Sparkle Icon */}
+      {/* 🟢 FIXED & ENHANCED CHAT INPUT SHELL */}
+      <div className="fixed bottom-[64px] md:bottom-0 left-0 md:left-64 right-0 z-40 flex flex-col pointer-events-none">
+        {/* Gradient fade to hide scrolling content elegantly */}
+        <div className="h-8 w-full bg-gradient-to-t from-surface to-transparent"></div>
+        
+        {/* Solid background container */}
+        <div className="bg-surface w-full px-4 md:px-8 pb-4 pt-1 pointer-events-auto flex justify-center">
+          <div className="w-full max-w-3xl">
+            <div className="bg-white p-2 md:p-3 rounded-3xl shadow-md border border-outline-variant/40 hover:border-primary/50 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10 transition-all duration-300 flex items-center gap-2">
+              
+              {/* Input Field */}
+              <div className="flex-grow relative">
+                <input
+                  ref={inputRef}
+                  className="w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-on-surface text-sm md:text-base placeholder:text-outline/80 px-3 py-2 font-medium"
+                  placeholder={
+                    eReportAgent
+                      ? EREPORT_AGENT_PLACEHOLDERS[eReportAgent.stage]
+                      : sssAgent
+                        ? SSS_AGENT_PLACEHOLDERS[sssAgent.stage]
+                        : businessPermitAgent
+                          ? BUSINESS_PERMIT_AGENT_PLACEHOLDERS[businessPermitAgent.stage]
+                          : donationAgent
+                            ? DONATION_AGENT_PLACEHOLDERS[donationAgent.stage]
+                            : tourismPlanner
+                              ? TOURISM_PLANNER_PLACEHOLDER
+                              : placeholders[placeholderIndex]
+                  }
+                  type="text"
+                  value={inputValue}
+                  onChange={e => {
+                    setInputOriginal(null);
+                    setInputValue(e.target.value);
+                  }}
+                  onKeyDown={e => e.key === 'Enter' && !isLoading && handleSend()}
+                  disabled={
+                    isLoading ||
+                    isFetchingEReportLocation ||
+                    isVerifyingSSS ||
+                    isCreatingSSSPayment ||
+                    isVerifyingBusinessPermit ||
+                    isSubmittingBusinessPermit ||
+                    isCreatingBusinessPermitPayment ||
+                    isCreatingDonationPayment
+                  }
+                />
+                {/* Translation hint — shows original Filipino text below input */}
+                {inputOriginal && !isTranslatingInput && (
+                  <p className="absolute -top-6 left-3 text-[10px] text-outline/70 flex items-center gap-1 whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
+                    <span className="material-symbols-outlined text-[12px] text-primary/60">translate</span>
+                    <span className="italic truncate">"{inputOriginal}"</span>
+                  </p>
+                )}
+                {/* Translating spinner */}
+                {isTranslatingInput && (
+                  <p className="absolute -top-6 left-3 text-[10px] text-primary/70 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
+                    Translating…
+                  </p>
+                )}
+              </div>
 
-            {/* Input Field */}
-            <div className="flex-grow relative">
-              <input
-                ref={inputRef}
-                className="w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-on-surface text-sm md:text-base placeholder:text-outline/80 px-2 py-2 font-medium"
-                placeholder={
-                  eReportAgent
-                    ? EREPORT_AGENT_PLACEHOLDERS[eReportAgent.stage]
-                    : sssAgent
-                      ? SSS_AGENT_PLACEHOLDERS[sssAgent.stage]
-                      : businessPermitAgent
-                        ? BUSINESS_PERMIT_AGENT_PLACEHOLDERS[businessPermitAgent.stage]
-                        : donationAgent
-                          ? DONATION_AGENT_PLACEHOLDERS[donationAgent.stage]
-                          : tourismPlanner
-                            ? TOURISM_PLANNER_PLACEHOLDER
-                            : placeholders[placeholderIndex]
-                }
-                type="text"
-                value={inputValue}
-                onChange={e => {
-                  setInputOriginal(null); // reset hint on manual edit
-                  setInputValue(e.target.value);
-                }}
-                onKeyDown={e => e.key === 'Enter' && !isLoading && handleSend()}
+              {/* Mic Button */}
+              <button
+                type="button"
+                onClick={startVoiceInput}
                 disabled={
                   isLoading ||
                   isFetchingEReportLocation ||
@@ -3667,89 +3702,58 @@ const AIChatHome = () => {
                   isCreatingBusinessPermitPayment ||
                   isCreatingDonationPayment
                 }
-              />
-              {/* Translation hint — shows original Filipino text below input */}
-              {inputOriginal && !isTranslatingInput && (
-                <p className="absolute -bottom-5 left-2 text-[10px] text-outline/70 flex items-center gap-1 whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
-                  <span className="material-symbols-outlined text-[12px] text-primary/60">translate</span>
-                  <span className="italic truncate">"{inputOriginal}"</span>
-                </p>
-              )}
-              {/* Translating spinner */}
-              {isTranslatingInput && (
-                <p className="absolute -bottom-5 left-2 text-[10px] text-primary/70 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
-                  Translating…
-                </p>
-              )}
-            </div>
-
-            {/* Mic Button — voice-to-text */}
-            <button
-              type="button"
-              onClick={startVoiceInput}
-              disabled={
-                isLoading ||
-                isFetchingEReportLocation ||
-                isVerifyingSSS ||
-                isCreatingSSSPayment ||
-                isVerifyingBusinessPermit ||
-                isSubmittingBusinessPermit ||
-                isCreatingBusinessPermitPayment ||
-                isCreatingDonationPayment
-              }
-              className={`w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full transition-all duration-200 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
-                isListening
-                  ? 'bg-red-500 text-white shadow-lg shadow-red-200 animate-pulse'
-                  : 'text-on-surface-variant hover:bg-surface-container hover:text-primary'
-              }`}
-              title={isListening ? 'Listening… tap to stop' : 'Speak your question'}
-            >
-              <span className="material-symbols-outlined text-xl md:text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                {isListening ? 'mic' : 'mic_none'}
-              </span>
-            </button>
-
-            {/* Auto Suggest Prompt */}
-            <button
-              type="button"
-              onClick={() => setInputValue('What are the requirements for National ID?')}
-              className="w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors shrink-0"
-              title="Quick sample prompt"
-            >
-              <span className="material-symbols-outlined text-xl md:text-2xl">auto_awesome</span>
-            </button>
-
-            {/* Send Button */}
-            <button
-              type="button"
-              onClick={() => handleSend()}
-              disabled={
-                isLoading ||
-                isFetchingEReportLocation ||
-                isVerifyingSSS ||
-                isCreatingSSSPayment ||
-                isVerifyingBusinessPermit ||
-                isSubmittingBusinessPermit ||
-                isCreatingBusinessPermitPayment ||
-                isCreatingDonationPayment ||
-                !inputValue.trim()
-              }
-              className="w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full bg-primary text-white shadow-md hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed shrink-0"
-              title="Send Message"
-            >
-              <span
-                className="material-symbols-outlined text-xl md:text-2xl"
-                style={{ fontVariationSettings: "'FILL' 1" }}
+                className={`w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full transition-all duration-200 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
+                  isListening
+                    ? 'bg-red-500 text-white shadow-lg shadow-red-200 animate-pulse'
+                    : 'text-on-surface-variant hover:bg-surface-container hover:text-primary'
+                }`}
+                title={isListening ? 'Listening… tap to stop' : 'Speak your question'}
               >
-                {isLoading ? 'progress_activity' : 'send'}
-              </span>
-            </button>
-          </div>
+                <span className="material-symbols-outlined text-xl md:text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  {isListening ? 'mic' : 'mic_none'}
+                </span>
+              </button>
 
-          <p className="text-[11px] text-center text-on-surface-variant/70 mt-1.5 font-medium">
-            eBuddy provides official informational guidance for Philippine government services.
-          </p>
+              {/* Auto Suggest Prompt */}
+              <button
+                type="button"
+                onClick={() => setInputValue('What are the requirements for National ID?')}
+                className="hidden md:flex w-10 h-10 md:w-11 md:h-11 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors shrink-0"
+                title="Quick sample prompt"
+              >
+                <span className="material-symbols-outlined text-xl md:text-2xl">auto_awesome</span>
+              </button>
+
+              {/* Send Button */}
+              <button
+                type="button"
+                onClick={() => handleSend()}
+                disabled={
+                  isLoading ||
+                  isFetchingEReportLocation ||
+                  isVerifyingSSS ||
+                  isCreatingSSSPayment ||
+                  isVerifyingBusinessPermit ||
+                  isSubmittingBusinessPermit ||
+                  isCreatingBusinessPermitPayment ||
+                  isCreatingDonationPayment ||
+                  !inputValue.trim()
+                }
+                className="w-10 h-10 md:w-11 md:h-11 flex items-center justify-center rounded-full bg-primary text-white shadow-md hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed shrink-0 mr-1"
+                title="Send Message"
+              >
+                <span
+                  className="material-symbols-outlined text-xl md:text-[22px]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  {isLoading ? 'progress_activity' : 'send'}
+                </span>
+              </button>
+            </div>
+            <p className="text-[10px] md:text-[11px] text-center text-on-surface-variant/70 mt-2 font-medium">
+              eBuddy provides official informational guidance for Philippine government services.
+            </p>
+          </div>
         </div>
       </div>
     </div>

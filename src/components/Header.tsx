@@ -10,7 +10,7 @@ const Header = () => {
   const showNotifications = isAuthenticated && !['/', '/egovph/sso'].includes(location.pathname)
 
   return (
-    <header className="bg-surface flex justify-between items-center px-margin-mobile h-touch-target w-full z-50 fixed top-0 border-b border-outline-variant/10">
+    <header className="bg-surface flex justify-between items-center px-4 md:px-8 h-touch-target md:h-16 w-full z-50 fixed top-0 border-b border-outline-variant/10 md:border-outline-variant/20 shadow-sm md:shadow-md transition-all">
       <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate(isAuthenticated ? '/home' : '/')}>
         <div className="w-9 h-9 rounded-full bg-white border border-primary/20 shadow-sm overflow-hidden">
           <EBuddyMascot alt="" className="w-full h-full p-0.5" />

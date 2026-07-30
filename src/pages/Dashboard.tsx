@@ -4,7 +4,7 @@ import EBuddyMascot from '../components/EBuddyMascot'
 const Dashboard = () => {
   return (
     <>
-      <main className="pt-20 pb-24 px-margin-mobile max-w-5xl mx-auto">
+      <div className="px-margin-mobile md:px-8 py-6 md:py-8 max-w-5xl mx-auto w-full">
 
 {/* Quick Actions — Pay Taxes & Business Permit */}
 <section className="mb-xl">
@@ -157,7 +157,7 @@ const Dashboard = () => {
 <span className="font-label-lg text-primary text-center">New Application</span>
 </div>
 </div>
-</main>
+</div>
     </>
   )
 }

@@ -9,7 +9,7 @@
 body {
   font-family: 'Atkinson Hyperlegible Next', sans-serif;
   -webkit-font-smoothing: antialiased;
-  min-height: max(884px, 100dvh);
+  min-height: 100dvh;
 }
 
 .bento-card {
