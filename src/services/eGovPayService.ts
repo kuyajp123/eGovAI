@@ -73,6 +73,10 @@ function formatDateForEGovPay(date: Date): string {
 export const createPaymentIntent = async (
   payload: PaymentIntentPayload
 ): Promise<PaymentIntent> => {
+  if (!Number.isFinite(payload.amount) || payload.amount <= 0) {
+    throw new Error('eGovPay requires a transaction amount greater than ₱0.00.')
+  }
+
   const useMock = import.meta.env.VITE_USE_MOCK_SERVICES === 'true'
 
   if (!useMock) {

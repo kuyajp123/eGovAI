@@ -25,6 +25,14 @@ interface SSSServiceConfig {
   bgColor: string
 }
 
+const configuredRecordVerificationFee = Number(
+  import.meta.env.VITE_SSS_RECORD_VERIFICATION_FEE ?? 1
+)
+const RECORD_VERIFICATION_FEE =
+  Number.isFinite(configuredRecordVerificationFee) && configuredRecordVerificationFee > 0
+    ? configuredRecordVerificationFee
+    : 1
+
 const SSS_SERVICES: SSSServiceConfig[] = [
   {
     id: 'contribution',
@@ -59,7 +67,7 @@ const SSS_SERVICES: SSSServiceConfig[] = [
     subtitle: 'Verify & link your SSS CRN with your PhilSys National ID via eVerify',
     agency: 'Social Security System (SSS)',
     defaultFees: [
-      { label: 'Identity Verification & Sync Fee', amount: 0 },
+      { label: 'Identity Verification & Sync Fee (eGovPay Test Mode)', amount: RECORD_VERIFICATION_FEE },
     ],
     color: 'text-emerald-600',
     bgColor: 'bg-emerald-50 border-emerald-200',
@@ -159,12 +167,6 @@ const SSSServicesPage = () => {
 
   const handleProceedToPayment = async () => {
     if (!selectedService) return
-
-    // If verification only (0 fee), jump to success directly
-    if (totalFees === 0) {
-      setStep('success')
-      return
-    }
 
     setPaying(true)
     try {

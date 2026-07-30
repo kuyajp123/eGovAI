@@ -45,40 +45,78 @@ export interface VerifyResult {
 }
 
 /**
+ * Automatically cleans up any injected eVerify SDK iframe/modal elements from the DOM
+ * once liveness completes so the "Liveness Complete — Please wait..." overlay disappears.
+ */
+export function closeEVerifySDKModal() {
+  if (typeof document === 'undefined') return
+
+  // Remove overlay elements after brief delay
+  setTimeout(() => {
+    // 1. Remove any iframe injected by the SDK
+    const iframes = Array.from(document.querySelectorAll('iframe'))
+    iframes.forEach(iframe => {
+      if (
+        iframe.src.includes('everify') ||
+        iframe.src.includes('liveness') ||
+        iframe.id.includes('ekyc') ||
+        iframe.className.includes('ekyc')
+      ) {
+        iframe.remove()
+      }
+    })
+
+    // 2. Remove fixed position overlay elements added to document.body outside #root
+    const bodyChildren = Array.from(document.body.children)
+    bodyChildren.forEach(child => {
+      if (child.id !== 'root' && child.tagName !== 'SCRIPT' && child.tagName !== 'LINK') {
+        child.remove()
+      }
+    })
+  }, 400)
+}
+
+/**
  * Triggers the official eVerify Face Liveness Web SDK window (window.eKYC().start({ pubKey })).
- * Also listens for postMessage from the popup as a backup channel.
- * Resolves with the captured face_liveness_session_id.
- * Times out after 90 seconds if the SDK never responds.
+ * Listens for postMessage from the popup as a backup channel.
+ * Resolves with the COMPLETED face_liveness_session_id from the camera scan.
  */
 export async function triggerEVerifyLivenessSDK(pubKey?: string): Promise<string> {
   const key = pubKey || PUBKEY || ''
 
-  if (typeof window === 'undefined' || !window.eKYC) {
-    throw new Error('eVerify Face Liveness Web SDK not available. Make sure the SDK script is loaded.')
+  if (typeof window === 'undefined') {
+    throw new Error('Window environment required for Face Liveness SDK.')
   }
+
+  // Clear any old consumed token before starting a new scan
+  localStorage.removeItem('egov_liveness_token')
 
   return new Promise<string>((resolve, reject) => {
     let resolved = false
     let timeoutHandle: ReturnType<typeof setTimeout>
 
+    const finishSuccess = (sessionId: string) => {
+      if (resolved) return
+      resolved = true
+      clearTimeout(timeoutHandle)
+      window.removeEventListener('message', onMessage)
+      localStorage.setItem('egov_liveness_token', sessionId)
+      closeEVerifySDKModal()
+      resolve(sessionId)
+    }
+
     // ── Backup channel: listen for postMessage from the eVerify popup ──────
-    // The popup sends a postMessage with the session result when liveness completes.
     const onMessage = (event: MessageEvent) => {
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
-        // Possible shapes: { session_id }, { result: { session_id } }, { data: { session_id } }
         const sessionId =
           data?.session_id ||
           data?.result?.session_id ||
           data?.data?.session_id ||
           data?.liveness_session_id
 
-        if (sessionId && !resolved) {
-          resolved = true
-          clearTimeout(timeoutHandle)
-          window.removeEventListener('message', onMessage)
-          localStorage.setItem('egov_liveness_token', sessionId)
-          resolve(sessionId)
+        if (sessionId) {
+          finishSuccess(sessionId)
         }
       } catch {
         // Non-JSON or unrelated postMessage — ignore
@@ -86,53 +124,63 @@ export async function triggerEVerifyLivenessSDK(pubKey?: string): Promise<string
     }
     window.addEventListener('message', onMessage)
 
-    // ── Primary channel: SDK promise ───────────────────────────────────────
-    try {
-      window.eKYC!().start({ pubKey: key })
-        .then((response) => {
-          if (!resolved) {
-            const sessionId = response?.result?.session_id
+    // ── Primary channel: eVerify SDK Popup ──────────────────────────────────
+    if (window.eKYC) {
+      try {
+        window.eKYC().start({ pubKey: key })
+          .then((response) => {
+            const resObj = response as any
+            const sessionId = resObj?.result?.session_id || resObj?.session_id
             if (sessionId) {
-              resolved = true
-              clearTimeout(timeoutHandle)
-              window.removeEventListener('message', onMessage)
-              localStorage.setItem('egov_liveness_token', sessionId)
-              resolve(sessionId)
+              finishSuccess(sessionId)
             } else {
-              console.warn('eVerify SDK returned no session_id in response:', response)
+              console.warn('eVerify SDK returned response without session_id:', response)
             }
-          }
-        })
-        .catch((err) => {
-          if (!resolved) {
-            clearTimeout(timeoutHandle)
-            window.removeEventListener('message', onMessage)
-            reject(err)
-          }
-        })
-    } catch (err) {
+          })
+          .catch((err) => {
+            if (!resolved) {
+              console.warn('eVerify SDK execution error or popup closed:', err)
+              setTimeout(() => {
+                if (!resolved) {
+                  const cached = localStorage.getItem('egov_liveness_token')
+                  if (cached) {
+                    finishSuccess(cached)
+                  } else {
+                    clearTimeout(timeoutHandle)
+                    window.removeEventListener('message', onMessage)
+                    closeEVerifySDKModal()
+                    reject(new Error('Face Liveness camera scan was cancelled or closed. Please try again.'))
+                  }
+                }
+              }, 1000)
+            }
+          })
+      } catch (err) {
+        window.removeEventListener('message', onMessage)
+        closeEVerifySDKModal()
+        reject(err)
+        return
+      }
+    } else {
       window.removeEventListener('message', onMessage)
-      reject(err)
+      closeEVerifySDKModal()
+      reject(new Error('eVerify Face Liveness Web SDK script not loaded on window.'))
       return
     }
 
-    // ── Timeout: give up after 90 seconds ──────────────────────────────────
+    // ── Timeout: 120 seconds for user to complete camera scan ─────────────
     timeoutHandle = setTimeout(() => {
       if (!resolved) {
         window.removeEventListener('message', onMessage)
-        // Try localStorage as last resort (set by a previous successful scan)
         const cached = localStorage.getItem('egov_liveness_token')
         if (cached) {
-          resolved = true
-          resolve(cached)
+          finishSuccess(cached)
         } else {
-          reject(new Error(
-            'Face Liveness timed out after 90 seconds. ' +
-            'The popup may have been blocked or the scan did not complete. Please try again.'
-          ))
+          closeEVerifySDKModal()
+          reject(new Error('Face Liveness camera scan timed out (120s). Please click "Verify Identity" to try again.'))
         }
       }
-    }, 90_000)
+    }, 120_000)
   })
 }
 
