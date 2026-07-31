@@ -1,10 +1,19 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { eChainLocalApiPlugin } from './server/eChainVitePlugin'
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    proxy: {
+export default defineConfig(({ mode }) => {
+  // Vite exposes only VITE_* values to browser code. Loading all values here
+  // makes server-only ECHAIN_* secrets available solely to the local middleware.
+  const localEnvironment = loadEnv(mode, process.cwd(), '')
+  Object.entries(localEnvironment).forEach(([key, value]) => {
+    process.env[key] = value
+  })
+
+  return {
+    plugins: [react(), eChainLocalApiPlugin()],
+    server: {
+      proxy: {
       // eGovPH SSO — login, token exchange, profile
       '/egov-api': {
         target: 'https://hackathon-sso.e.gov.ph',
@@ -54,6 +63,7 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/compass-api/, ''),
         secure: true,
       },
+      },
     },
-  },
+  }
 })

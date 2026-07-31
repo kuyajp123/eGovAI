@@ -118,9 +118,11 @@ import {
 import {
   DonationDraft,
   DonationSummary,
+  getDonationLedger,
   recordDonationPaymentLink,
   recordDonationPaymentStatus,
 } from '../services/donationService';
+import { syncDonationChainAnchors } from '../services/eChainService';
 
 interface Message {
   id: string;
@@ -410,9 +412,11 @@ const AIChatHome = () => {
     if (signal.status !== 'paid' || signal.verificationSource === 'egovpay_api') {
       setDonationAgent(prev => prev?.stage === 'payment' ? { ...prev, paymentStatus: signal.status } : prev);
     }
-    if (user?.id) void recordDonationPaymentStatus(user.id, paymentId, signal).catch(error => {
-      console.warn('Donation ledger could not apply the payment status:', error);
-    });
+    if (user?.id) void recordDonationPaymentStatus(user.id, paymentId, signal)
+      .then(() => syncDonationChainAnchors(user.id, getDonationLedger(user.id)))
+      .catch(error => {
+        console.warn('Donation ledger or eGovChain synchronization could not apply the payment status:', error);
+      });
   }, [user?.id]);
 
   const checkChatPaymentStatus = useCallback(async (paymentId: string) => {

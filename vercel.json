@@ -29,7 +29,7 @@
       "destination": "https://dbm-ws.oueg.info/:path*"
     },
     {
-      "source": "/((?!egov-api|integration-api|everify-api|emessage-api|egovpay-api|face-liveness-api|compass-api).*)",
+      "source": "/((?!api|egov-api|integration-api|everify-api|emessage-api|egovpay-api|face-liveness-api|compass-api).*)",
       "destination": "/index.html"
     }
   ]

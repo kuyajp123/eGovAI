@@ -49,6 +49,7 @@ npm run dev
 ## Available Scripts
 
 - `npm run dev` - Start development server
+- `npm run echain:generate-wallet` - Create a dedicated test-only eGovChain signer in `.env.local`
 - `npm run build` - Build for production
 - `npm run preview` - Preview production build
 - `npm run lint` - Run ESLint
@@ -120,4 +121,33 @@ VITE_API_BASE_URL=https://your-domain.com/api
 ### Documentation
 
 Detailed SSO integration documentation: [docs/EGOV_SSO_INTEGRATION.md](docs/EGOV_SSO_INTEGRATION.md)
+
+## eGovChain donation anchoring
+
+Paid donations retain their full append-only SHA-256 ledger in the current browser. After the eGovPay API verifies `PAID` or `SUCCESS`, the server re-verifies the payment and sends only the 32-byte confirmation-block hash to eGovChain in a signed, zero-value transaction. Donor identity, campaign details, dedication, and payment details are not placed in the transaction input.
+
+1. Confirm with the eGovChain administrator that a self-generated signer is allowed on chain ID `13371`.
+2. Generate a dedicated prototype signer locally:
+
+```bash
+npm run echain:generate-wallet
+```
+
+The command writes the private key to ignored `.env.local` without printing it. Never use a personal wallet and never add `VITE_` to the private-key variable.
+
+3. Copy these server-only variables to Vercel Project Settings → Environment Variables:
+
+```env
+ECHAIN_RPC_URL=https://hackathon-blockchain.e.gov.ph
+ECHAIN_EXPLORER_URL=https://hackathon-explorer.e.gov.ph
+ECHAIN_EXPLORER_TX_URL_TEMPLATE=https://hackathon-explorer.e.gov.ph/tx/{txHash}
+ECHAIN_CHAIN_ID=13371
+ECHAIN_PRIVATE_KEY=0x...
+EGOVPAY_API_KEY=test_...
+EGOVPAY_API_URL=https://egovpay-pgi-ws-dev.oueg.info
+```
+
+4. Redeploy the Vercel project. During local development, `npm run dev` exposes equivalent `/api/echain/*` middleware on the Vite server. Production continues to use the Vercel Functions.
+
+Anchoring failures do not change a donation's verified payment status or corrupt its local ledger. The Donations module shows the submitted transaction, receipt state, explorer link, and a retry action.
 

@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getCachedPaymentTransaction, getTransactionDetails, publishPaymentStatus, TransactionDetails } from '../services/eGovPayService'
 import { sendPaymentConfirmation } from '../services/eMessageService'
-import { recordDonationPaymentStatus } from '../services/donationService'
+import { getDonationBlocks, recordDonationPaymentStatus } from '../services/donationService'
+import { DonationChainAnchorReceipt, syncDonationChainAnchors } from '../services/eChainService'
 
 const POLL_INTERVAL_MS = 3000   // check every 3 seconds
 const MAX_POLL_ATTEMPTS = 20    // give up after ~60 seconds
@@ -19,6 +20,7 @@ const PaymentReturnPage = () => {
   const [isPolling, setIsPolling] = useState(true)
   const [smsSent, setSmsSent] = useState(false)
   const [donationLedgerRecorded, setDonationLedgerRecorded] = useState(false)
+  const [donationAnchor, setDonationAnchor] = useState<DonationChainAnchorReceipt | null>(null)
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // URL params from eGovPay redirect or localStorage
@@ -70,6 +72,12 @@ const PaymentReturnPage = () => {
         try {
           await recordDonationPaymentStatus(cachedTx.context.userId, cachedTx.uuid || data.uuid, signal)
           setDonationLedgerRecorded(true)
+          const donationBlocks = getDonationBlocks(cachedTx.context.userId, cachedTx.context.entityId)
+          const anchors = await syncDonationChainAnchors(cachedTx.context.userId, donationBlocks)
+          const confirmationBlock = [...donationBlocks].reverse().find(block => block.event === 'payment_confirmed')
+          setDonationAnchor(confirmationBlock
+            ? anchors.find(anchor => anchor.blockHash === confirmationBlock.hash) || null
+            : null)
         } catch (ledgerError) {
           console.warn('Donation was verified but its local ledger could not be updated:', ledgerError)
           setError('Payment was verified, but the local donation ledger could not append its confirmation block. Open Donations to inspect the ledger integrity status.')
@@ -269,6 +277,26 @@ const PaymentReturnPage = () => {
           </div>
 
           {isDonation && error && <p className="text-xs text-amber-900 p-3 rounded-xl bg-amber-50 border border-amber-200">{error}</p>}
+
+          {isDonation && donationLedgerRecorded && (
+            <div className={`p-4 rounded-2xl border text-left text-xs ${donationAnchor?.status === 'confirmed' ? 'bg-emerald-50 border-emerald-200' : donationAnchor?.status === 'failed' ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'}`}>
+              <div className="flex items-center justify-between gap-3">
+                <strong>eGovChain anchor</strong>
+                <span className="uppercase text-[9px] font-bold">{donationAnchor?.status || 'preparing'}</span>
+              </div>
+              <p className="text-[11px] mt-2">
+                {donationAnchor?.status === 'confirmed'
+                  ? 'The SHA-256 confirmation-block hash is confirmed on the eGovChain node.'
+                  : donationAnchor?.status === 'submitted'
+                    ? 'The SHA-256 confirmation-block hash was submitted and is waiting for a block receipt.'
+                    : donationAnchor?.status === 'failed'
+                      ? 'Your payment and local ledger are confirmed, but the eGovChain anchor needs attention in the Donations module.'
+                      : 'Preparing the verified confirmation-block hash for eGovChain.'}
+              </p>
+              {donationAnchor?.explorerUrl && <a href={donationAnchor.explorerUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 font-bold text-blue-700"><span className="material-symbols-outlined text-sm">open_in_new</span>View eGovChain Transaction</a>}
+              {donationAnchor?.error && <p className="text-[10px] mt-2 text-amber-900">{donationAnchor.error}</p>}
+            </div>
+          )}
 
           <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-left space-y-2.5 text-xs">
             {isDonation && cachedTx?.context && (

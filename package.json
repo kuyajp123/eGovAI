@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "echain:generate-wallet": "node scripts/generate-echain-wallet.mjs",
     "build": "tsc && vite build",
     "test": "vitest",
     "test:run": "vitest run",
@@ -13,6 +14,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "ethers": "^6.13.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-markdown": "9.0.1",

@@ -11,6 +11,7 @@ import {
   normalizeDonationAmount,
   resolveDonationCampaign,
 } from './donationService'
+import { getDonationChainAnchors } from './eChainService'
 
 export type DonationAgentStage = 'campaign' | 'amount' | 'review' | 'payment'
 
@@ -51,7 +52,7 @@ const cancellationPattern =
 const sensitivePaymentPattern = /\b(?:otp|pin|cvv|card number|credit card|debit card|password)\b/i
 
 export const isDonationTrackingIntent = (message: string): boolean =>
-  /\b(?:show|view|track|history|where|status|total|how much)\b.{0,60}\b(?:donations?|donated|donation)\b|\bwhere did my (?:last )?donation go\b/i.test(message)
+  /\b(?:show|view|track|history|where|status|total|how much)\b.{0,60}\b(?:donations?|donated|donation)\b|\bwhere did my (?:last )?donation go\b|\b(?:donation|payment).{0,40}(?:echain|blockchain|anchored?)\b|\b(?:echain|blockchain).{0,40}(?:donation|payment)\b/i.test(message)
 
 export const isDonationAgentIntent = (message: string): boolean => {
   const normalized = message.trim()
@@ -175,7 +176,7 @@ export const continueDonationAgent = (state: DonationAgentState, message: string
     return {
       state,
       reply: state.paymentStatus === 'paid'
-        ? 'eGovPay has confirmed this donation. Its confirmation block is now part of your local donation ledger.'
+        ? 'eGovPay has confirmed this donation. Its confirmation block is part of your local ledger, and the app will submit only that block’s SHA-256 hash to eGovChain.'
         : 'Use the official eGovPay link in the payment card. I cannot mark a donation as paid from a chat message; the gateway status must verify it.',
     }
   }
@@ -233,6 +234,17 @@ export const processDonationTrackingIntent = (message: string, userId: string): 
   const total = paid.reduce((sum, donation) => sum + donation.amount, 0)
   const last = filtered[0]
   const asksLast = /\b(?:last|latest|where)\b/i.test(message)
+  const asksChain = /\b(?:echain|blockchain|anchored?)\b/i.test(message)
+  const donationIds = new Set(filtered.map(donation => donation.donationId))
+  const matchingAnchors = getDonationChainAnchors(userId).filter(anchor => donationIds.has(anchor.donationId))
+  const confirmedAnchors = matchingAnchors.filter(anchor => anchor.status === 'confirmed')
+  if (asksChain) {
+    const latestAnchor = matchingAnchors[0]
+    const content = latestAnchor
+      ? `The latest matching eGovChain anchor is **${latestAnchor.status}**. This browser has **${confirmedAnchors.length}** confirmed anchor${confirmedAnchors.length === 1 ? '' : 's'} for the matching donations. Open the Donations module to inspect the transaction hash and explorer link.`
+      : 'No matching eGovChain anchor has been recorded in this browser yet. Only eGovPay API-verified payment-confirmation blocks are eligible for anchoring.'
+    return { isTrackingIntent: true, content, donations: filtered }
+  }
   const content = asksLast && last
     ? `Your latest matching donation is **₱${last.amount.toLocaleString()}** for **${last.campaign.title}**, routed to **${last.campaign.recipientName}** for **${last.campaign.purpose}**. Its current status is **${last.status}**.`
     : `This browser records **${filtered.length}** matching donation${filtered.length === 1 ? '' : 's'}, with **₱${total.toLocaleString()}** confirmed by eGovPay.`
