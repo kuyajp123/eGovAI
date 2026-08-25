@@ -56,6 +56,13 @@ export default defineConfig(({ mode }) => {
         rewrite: (path) => path.replace(/^\/face-liveness-api/, ''),
         secure: true,
       },
+      // eReport — citizen incident & complaint reporting
+      '/ereport-api': {
+        target: 'https://platforms-api.e.gov.ph/ereport',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/ereport-api/, ''),
+        secure: true,
+      },
       // DBM Transparency (Compass API) — SAAODB, NCA, SARO, LGSF records
       '/compass-api': {
         target: 'https://dbm-ws.oueg.info',

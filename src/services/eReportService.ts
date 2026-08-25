@@ -65,56 +65,104 @@ export interface AiReportDraft {
 
 const STORAGE_KEY = 'egov_ereports_store';
 const AI_DRAFT_STORAGE_KEY = 'egov_ai_ereport_draft';
-const EREPORT_TOKEN = import.meta.env.VITE_EREPORT_ACCESS_TOKEN || import.meta.env.VITE_EREPORT_ACCESS_CODE || '';
+
+const EREPORT_BASE_URL = '/ereport-api';
+let cachedEReportToken: string | null = null;
+let ereportTokenExpiry: number | null = null;
+
+export const getEReportToken = async (): Promise<string> => {
+  if (cachedEReportToken && ereportTokenExpiry && Date.now() < ereportTokenExpiry) {
+    return cachedEReportToken;
+  }
+
+  const accessCode =
+    import.meta.env.VITE_EREPORT_ACCESS_CODE ||
+    import.meta.env.VITE_EREPORT_ACCESS_TOKEN ||
+    '';
+
+  if (!accessCode) {
+    throw new Error('Missing eReport ACCESS_CODE. Configure VITE_EREPORT_ACCESS_CODE in your .env file.');
+  }
+
+  const response = await fetch(`${EREPORT_BASE_URL}/api/integration/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ access_code: accessCode }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to generate eReport access token: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  cachedEReportToken = data.access_token;
+  ereportTokenExpiry = Date.now() + 24 * 60 * 60 * 1000;
+  return data.access_token;
+};
+
+export interface EReportTypeItem {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export const getEReportTypes = async (): Promise<EReportTypeItem[]> => {
+  try {
+    const token = await getEReportToken();
+    const response = await fetch(`${EREPORT_BASE_URL}/api/integration/datasets/report_types`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return (data.data || []).map((item: any) => ({
+        id: item.id,
+        code: item.attributes?.code || item.id,
+        name: item.attributes?.name || item.attributes?.code || 'Incident',
+      }));
+    }
+  } catch (err) {
+    console.warn('eReport datasets fetch error:', err);
+  }
+  return [];
+};
+
+const mapCategoryToEReportType = (cat: ReportCategory): string => {
+  switch (cat) {
+    case 'infrastructure':
+      return 'accident';
+    case 'safety':
+      return 'crime';
+    case 'sanitation':
+      return 'illegal_dumping';
+    case 'traffic':
+      return 'accident';
+    case 'emergency':
+      return 'fire';
+    case 'corruption':
+      return 'red_tape';
+    case 'other':
+    default:
+      return 'crime';
+  }
+};
+
+const normaliseMobileNumber = (raw?: string): string => {
+  if (!raw) return '639000000000';
+  const digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('63') && digits.length === 12) return digits;
+  if (digits.startsWith('09') && digits.length === 11) return `63${digits.slice(1)}`;
+  if (digits.startsWith('9') && digits.length === 10) return `63${digits}`;
+  return '639000000000';
+};
 
 // Initial default reports for demonstration
-const DEFAULT_REPORTS: IncidentReport[] = [
-  // {
-  //   id: 'rep-101',
-  //   trackingId: 'ERP-2026-98124',
-  //   category: 'infrastructure',
-  //   categoryLabel: 'Road & Infrastructure Damage',
-  //   title: 'Hazardous Pothole on Katipunan Ave',
-  //   description: 'Deep road damage causing traffic slowing and vehicle risk near pedestrian overpass.',
-  //   location: 'Katipunan Ave, Quezon City, Metro Manila',
-  //   severity: 'medium',
-  //   citizenName: 'Juan Dela Cruz',
-  //   citizenEmail: 'juan.delacruz@example.com',
-  //   citizenMobile: '+63 917 123 4567',
-  //   status: 'Dispatched',
-  //   createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-  //   updatedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-  //   agencyAssigned: 'DPWH National Capital Region',
-  //   timeline: [
-  //     { status: 'Submitted', timestamp: new Date(Date.now() - 86400000 * 2).toISOString(), note: 'Report received via eGovPH eReport portal' },
-  //     { status: 'Under Review', timestamp: new Date(Date.now() - 86400000 * 1.5).toISOString(), note: 'Verified by QC LGU Disaster & Risk Office' },
-  //     { status: 'Dispatched', timestamp: new Date(Date.now() - 3600000 * 4).toISOString(), note: 'Assigned repair team from DPWH District 1' }
-  //   ]
-  // },
-  // {
-  //   id: 'rep-102',
-  //   trackingId: 'ERP-2026-44319',
-  //   category: 'sanitation',
-  //   categoryLabel: 'Waste & Sanitation',
-  //   title: 'Uncollected Garbage Accumulation',
-  //   description: 'Waste left uncollected for 4 days near public market entrance.',
-  //   location: 'Barangay Central, Pasig City',
-  //   severity: 'high',
-  //   citizenName: 'Juan Dela Cruz',
-  //   citizenEmail: 'juan.delacruz@example.com',
-  //   citizenMobile: '+63 917 123 4567',
-  //   status: 'Resolved',
-  //   createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-  //   updatedAt: new Date(Date.now() - 86400000 * 1).toISOString(),
-  //   agencyAssigned: 'Pasig City Environment & Natural Resources Office',
-  //   timeline: [
-  //     { status: 'Submitted', timestamp: new Date(Date.now() - 86400000 * 5).toISOString(), note: 'Report logged into eGovPH' },
-  //     { status: 'Under Review', timestamp: new Date(Date.now() - 86400000 * 4).toISOString(), note: 'Reviewed by CENRO Pasig' },
-  //     { status: 'Dispatched', timestamp: new Date(Date.now() - 86400000 * 2).toISOString(), note: 'Special cleanup truck dispatched' },
-  //     { status: 'Resolved', timestamp: new Date(Date.now() - 86400000 * 1).toISOString(), note: 'Site cleared and sanitized' }
-  //   ]
-  // }
-];
+const DEFAULT_REPORTS: IncidentReport[] = [];
 
 export const categoryLabels: Record<ReportCategory, string> = {
   infrastructure: 'Road & Infrastructure Damage',
@@ -193,8 +241,65 @@ export const getUserReports = async (): Promise<IncidentReport[]> => {
  * Submit a new incident report to eReport API
  */
 export const submitIncidentReport = async (payload: CreateReportPayload): Promise<IncidentReport> => {
-  const trackingNumber = `ERP-2026-${Math.floor(10000 + Math.random() * 90000)}`;
+  let trackingNumber = `ERP-2026-${Math.floor(10000 + Math.random() * 90000)}`;
   const now = new Date().toISOString();
+  let serverCaseNumber: string | undefined = undefined;
+
+  const names = (payload.citizenName || 'Citizen Reporter').trim().split(/\s+/);
+  const firstName = names[0] || 'Citizen';
+  const lastName = names.slice(1).join(' ') || 'Reporter';
+
+  const useMock = import.meta.env.VITE_USE_MOCK_SERVICES === 'true';
+
+  if (!useMock) {
+    try {
+      const token = await getEReportToken();
+      const reportType = mapCategoryToEReportType(payload.category);
+      const mobile = normaliseMobileNumber(payload.citizenMobile);
+
+      const requestBody = {
+        mobile,
+        first_name: firstName,
+        last_name: lastName,
+        gender: 'Male',
+        complainant_email: payload.citizenEmail || 'citizen@egov.ph',
+        report_type: reportType,
+        subject: payload.title.slice(0, 150),
+        message: `${payload.description}\n\nLocation: ${payload.location}`,
+        evidences: payload.imageUrl ? [payload.imageUrl] : [],
+        region_code: '040000000',
+        province_code: '042100000',
+        municipality_code: '042111000',
+        barangay_code: '042111011',
+        latitude: '14.60',
+        longitude: '120.98',
+      };
+
+      const res = await fetch(`${EREPORT_BASE_URL}/api/integration/submit_complaint`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        if (result.case_number) {
+          serverCaseNumber = result.case_number;
+          trackingNumber = result.case_number;
+        }
+      } else {
+        const errorJson = await res.json().catch(() => ({}));
+        throw new Error(errorJson.message || `eReport Server Error (HTTP ${res.status})`);
+      }
+    } catch (err) {
+      console.error('eReport server submission failed:', err);
+      throw err; // Propagate error so UI accurately reflects reality
+    }
+  }
 
   const newReport: IncidentReport = {
     id: `rep-${Date.now()}`,
@@ -217,28 +322,12 @@ export const submitIncidentReport = async (payload: CreateReportPayload): Promis
       {
         status: 'Submitted',
         timestamp: now,
-        note: 'Incident report submitted and encrypted via eGovPH eReport service',
+        note: serverCaseNumber
+          ? `Incident report submitted and registered with eReport portal (Case: ${serverCaseNumber})`
+          : 'Incident report submitted and encrypted via eGovPH eReport service',
       },
     ],
   };
-
-  // Attempt eReport external endpoint POST if token exists
-  try {
-    if (EREPORT_TOKEN) {
-      console.log('Submitting to eReport API with Access Token:', EREPORT_TOKEN.substring(0, 8) + '...');
-      // Attempt backend endpoint dispatch
-      await fetch('/integration-api/api/v1/egov/ereport/submit', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${EREPORT_TOKEN}`,
-        },
-        body: JSON.stringify(newReport),
-      }).catch(err => console.log('eReport API server notification logged:', err));
-    }
-  } catch (e) {
-    console.warn('eReport remote sync fallback to local storage:', e);
-  }
 
   // Save to local storage
   const currentReports = await getUserReports();

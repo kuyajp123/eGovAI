@@ -36,6 +36,7 @@ const EReportPage = () => {
   
   // Submission & List States
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [submittedReport, setSubmittedReport] = useState<IncidentReport | null>(null)
   const [reports, setReports] = useState<IncidentReport[]>([])
   const [searchTrackingId, setSearchTrackingId] = useState('')
@@ -125,6 +126,7 @@ const EReportPage = () => {
     if (!title.trim() || !description.trim() || !location.trim()) return
 
     setIsSubmitting(true)
+    setSubmitError(null)
     try {
       const citizenName = user
         ? [user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ')
@@ -159,6 +161,7 @@ const EReportPage = () => {
       setSeverity('medium')
     } catch (err) {
       console.error('Error submitting eReport:', err)
+      setSubmitError(err instanceof Error ? err.message : 'The eReport could not be submitted to the government portal. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -329,6 +332,16 @@ const EReportPage = () => {
           </section>
 
           <form onSubmit={handleFormSubmit} className="space-y-6">
+            {submitError && (
+              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 flex items-start gap-3 text-error">
+                <span className="material-symbols-outlined text-xl shrink-0 mt-0.5">error</span>
+                <div>
+                  <h3 className="font-bold text-sm text-red-950">Submission Failed</h3>
+                  <p className="text-xs text-red-900/90 mt-0.5">{submitError}</p>
+                </div>
+              </div>
+            )}
+
             {aiDraftActive && (
               <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                 <div className="flex items-start gap-2.5">
