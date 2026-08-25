@@ -7,8 +7,11 @@ import {
 
 // Uses the proxy /face-liveness-api -> https://platforms-api.e.gov.ph/face-liveness
 const LIVENESS_BASE_URL = import.meta.env.VITE_FACE_LIVENESS_URL || '/face-liveness-api'
-const DEFAULT_API_KEY = '94b20c174123447b89f0469bac898925'
-const API_KEY = import.meta.env.VITE_FACE_LIVENESS_API_KEY || DEFAULT_API_KEY
+const API_KEY =
+  import.meta.env.VITE_FACELIVENESS_TOKEN ||
+  import.meta.env.VITE_FACE_LIVENESS_API_KEY ||
+  import.meta.env.VITE_FACELIVENESS_API_KEY ||
+  ''
 
 const getAuthHeaders = (): Record<string, string> => ({
   'Content-Type': 'application/json',

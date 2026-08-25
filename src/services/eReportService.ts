@@ -65,7 +65,7 @@ export interface AiReportDraft {
 
 const STORAGE_KEY = 'egov_ereports_store';
 const AI_DRAFT_STORAGE_KEY = 'egov_ai_ereport_draft';
-const EREPORT_TOKEN = import.meta.env.VITE_EREPORT_ACCESS_TOKEN;
+const EREPORT_TOKEN = import.meta.env.VITE_EREPORT_ACCESS_TOKEN || import.meta.env.VITE_EREPORT_ACCESS_CODE || '';
 
 // Initial default reports for demonstration
 const DEFAULT_REPORTS: IncidentReport[] = [

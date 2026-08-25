@@ -6,7 +6,7 @@
 // ============================================================
 
 const BASE_URL = '/compass-api'
-const API_KEY = import.meta.env.VITE_COMPASS_API_KEY as string
+const API_KEY = (import.meta.env.VITE_COMPASS_TOKEN || import.meta.env.VITE_COMPASS_API_KEY || '') as string
 
 // ── Shared pagination wrapper ─────────────────────────────────────────────────
 

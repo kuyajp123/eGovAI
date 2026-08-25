@@ -44,7 +44,7 @@ export default defineConfig(({ mode }) => {
       },
       // eGovPay — government payment gateway
       '/egovpay-api': {
-        target: 'https://egovpay-pgi-ws-dev.oueg.info',
+        target: 'https://platforms-api.e.gov.ph/egovpay',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/egovpay-api/, ''),
         secure: true,

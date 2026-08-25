@@ -6,8 +6,18 @@
 // ============================================================
 
 const EGOVPAY_BASE = '/egovpay-api'
-const EGOVPAY_API_KEY = import.meta.env.VITE_EGOVPAY_API_KEY
-const SETTLEMENT_UUID = import.meta.env.VITE_EGOVPAY_SETTLEMENT_UUID
+
+const getEGovPayToken = (): string =>
+  import.meta.env.VITE_EGOVPAY_TOKEN || import.meta.env.VITE_EGOVPAY_API_KEY || ''
+
+const getEGovPayTokenHeader = (): string => {
+  const token = getEGovPayToken().trim()
+  if (!token) return ''
+  return token.startsWith('test_') ? token : `test_${token}`
+}
+
+const getSettlementUuid = (): string =>
+  import.meta.env.VITE_EGOVPAY_SETTLEMENT_TEMPLATE_UUID || import.meta.env.VITE_EGOVPAY_SETTLEMENT_UUID || ''
 
 export interface PaymentIntentPayload {
   amount: number       // total PHP amount
@@ -148,7 +158,7 @@ export const getCachedPaymentTransaction = (identifier?: string): CachedPaymentT
 
 export const resolvePaymentSettlementTemplate = (
   payload: Pick<PaymentIntentPayload, 'settlementTemplateUuid' | 'context'>,
-  defaultSettlementTemplateUuid: string = SETTLEMENT_UUID
+  defaultSettlementTemplateUuid: string = getSettlementUuid()
 ): string => {
   const recipientSettlement = payload.settlementTemplateUuid?.trim()
   if (payload.context?.kind === 'donation' && !recipientSettlement) {
@@ -213,7 +223,9 @@ export const createPaymentIntent = async (
 
   if (!useMock) {
     const txnid = generateRef()
-    const digest = await computeDigest(payload.amount, txnid, EGOVPAY_API_KEY)
+    const token = getEGovPayToken()
+    const tokenHeader = getEGovPayTokenHeader()
+    const digest = await computeDigest(payload.amount, txnid, token)
     const now = new Date()
     const expiry = new Date(now.getTime() + 24 * 60 * 60 * 1000) // 24 hours
     const expiresAtStr = formatDateForEGovPay(expiry)
@@ -243,7 +255,7 @@ export const createPaymentIntent = async (
       method: 'POST',
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
-        'X-eGovPay-Token': EGOVPAY_API_KEY,
+        'X-eGovPay-Token': tokenHeader,
       },
       body: JSON.stringify(requestBody),
     })
@@ -320,7 +332,7 @@ export const getTransactionDetails = async (
     method: 'GET',
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
-      'X-eGovPay-Token': EGOVPAY_API_KEY,
+      'X-eGovPay-Token': getEGovPayTokenHeader(),
     },
   })
 
