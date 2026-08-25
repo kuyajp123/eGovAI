@@ -6,10 +6,9 @@
 // ============================================================
 
 const EVERIFY_BASE = '/everify-api'
-const DEFAULT_CLIENT_ID = '2339c46bf9664aa3b1c8527d22feeadd'
-const DEFAULT_CLIENT_SECRET = '94c74a6d493d4dc18df4b50bd78e58e9'
-const DEFAULT_PUBKEY =
-  'eyJpdiI6InAzOGc3d1BZcVVZck1IY3plS0xscVE9PSIsInZhbHVlIjoiSlRESmdFYkZ4ZnV3M1ZkUjFiTHpDUT09IiwibWFjIjoiZTEzZjI5ZGRkZTVhNWNkNGU3ZmQ0NDY4MTAyZDY2Yjc1NjJiYmMxNTMwN2E2NzVlZmM5ZjhjZmEyZWM1ZmMwMCIsInRhZyI6IiJ9'
+const DEFAULT_CLIENT_ID = import.meta.env.VITE_EVERIFY_CLIENT_ID || ''
+const DEFAULT_CLIENT_SECRET = import.meta.env.VITE_EVERIFY_CLIENT_SECRET || ''
+const DEFAULT_PUBKEY = import.meta.env.VITE_EVERIFY_PUBKEY || ''
 
 export interface FaceLivenessSDKResponse {
   status: string

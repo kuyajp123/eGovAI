@@ -21,8 +21,8 @@ export const EGOV_CONFIG = {
   egovSsoUrl: import.meta.env.VITE_EGOV_SSO_URL || 'https://platforms-api.e.gov.ph/egov-sso',
 
   // Partner credentials
-  partnerCode: import.meta.env.VITE_EGOV_PARTNER_CODE || 'a101db722afd40a2b33d39ed14b274e5',
-  partnerSecret: import.meta.env.VITE_EGOV_PARTNER_SECRET || 'bfacc31fe03042ccbd843ffd44b3e431',
+  partnerCode: import.meta.env.VITE_EGOV_PARTNER_CODE,
+  partnerSecret: import.meta.env.VITE_EGOV_PARTNER_SECRET,
   
   // Your SSO callback endpoint (Mode A)
   ssoCallbackPath: '/egovph/sso',

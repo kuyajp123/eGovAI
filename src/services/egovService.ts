@@ -184,7 +184,7 @@ export const updateLastLogin = async (userId: string): Promise<void> => {
 
 // Use proxy for integration API to avoid CORS and DNS issues
 const INTEGRATION_BASE_URL = '/integration-api';
-const ACCESS_CODE = import.meta.env.VITE_EGOV_ACCESS_CODE;
+const ACCESS_CODE = import.meta.env.VITE_EGOVAI_ACCESS_CODE || import.meta.env.VITE_EGOV_ACCESS_CODE || '';
 
 /**
  * Get or generate access token for AI Integration API
@@ -193,6 +193,10 @@ const getAccessToken = async (): Promise<string> => {
   // Return cached token if still valid
   if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
     return cachedToken;
+  }
+
+  if (!ACCESS_CODE) {
+    throw new Error('Missing eGovAI ACCESS_CODE. Configure VITE_EGOVAI_ACCESS_CODE in your .env file.');
   }
 
   try {

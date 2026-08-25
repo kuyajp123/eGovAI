@@ -1,11 +1,18 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
+if (typeof process.loadEnvFile === 'function') {
+  try {
+    process.loadEnvFile()
+  } catch {}
+}
+
 // Mock environment
-const EVERIFY_BASE = 'https://platforms-api.e.gov.ph/everify'
-const CLIENT_ID = '2339c46bf9664aa3b1c8527d22feeadd'
-const CLIENT_SECRET = '94c74a6d493d4dc18df4b50bd78e58e9'
+const EVERIFY_BASE = process.env.VITE_EVERIFY_URL || 'https://platforms-api.e.gov.ph/everify'
+const CLIENT_ID = process.env.VITE_EVERIFY_CLIENT_ID || 'mock_client_id'
+const CLIENT_SECRET = process.env.VITE_EVERIFY_CLIENT_SECRET || 'mock_client_secret'
 const PUBKEY =
+  process.env.VITE_EVERIFY_PUBKEY ||
   'eyJpdiI6InAzOGc3d1BZcVVZck1IY3plS0xscVE9PSIsInZhbHVlIjoiSlRESmdFYkZ4ZnV3M1ZkUjFiTHpDUT09IiwibWFjIjoiZTEzZjI5ZGRkZTVhNWNkNGU3ZmQ0NDY4MTAyZDY2Yjc1NjJiYmMxNTMwN2E2NzVlZmM5ZjhjZmEyZWM1ZmMwMCIsInRhZyI6IiJ9'
 
 test('eVerify Auth payload schema complies with specification', () => {
@@ -14,8 +21,8 @@ test('eVerify Auth payload schema complies with specification', () => {
     client_secret: CLIENT_SECRET,
   }
 
-  assert.equal(authPayload.client_id, '2339c46bf9664aa3b1c8527d22feeadd')
-  assert.equal(authPayload.client_secret, '94c74a6d493d4dc18df4b50bd78e58e9')
+  assert.equal(authPayload.client_id, CLIENT_ID)
+  assert.equal(authPayload.client_secret, CLIENT_SECRET)
 })
 
 test('eVerify Query payload structure matches required format with face_liveness_session_id', () => {

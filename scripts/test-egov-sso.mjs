@@ -1,10 +1,18 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-// Mock environment
-process.env.VITE_EGOV_PARTNER_CODE = 'a101db722afd40a2b33d39ed14b274e5'
-process.env.VITE_EGOV_PARTNER_SECRET = 'bfacc31fe03042ccbd843ffd44b3e431'
-process.env.VITE_EGOV_SSO_URL = 'https://platforms-api.e.gov.ph/egov-sso'
+// Automatically load environment variables from .env if present
+if (typeof process.loadEnvFile === 'function') {
+  try {
+    process.loadEnvFile()
+  } catch {
+    // .env not found in CI or clean environment
+  }
+}
+
+const partnerCode = process.env.VITE_EGOV_PARTNER_CODE || 'mock_partner_code'
+const partnerSecret = process.env.VITE_EGOV_PARTNER_SECRET || 'mock_partner_secret'
+const egovSsoUrl = process.env.VITE_EGOV_SSO_URL || 'https://platforms-api.e.gov.ph/egov-sso'
 
 const apiProfile = {
   uniqid: 'MVPCBEUVCGPZR',
@@ -72,8 +80,6 @@ test('mapEGovProfileToUser correctly normalizes complete citizen profile', () =>
 })
 
 test('Token exchange and profile fetch payload structures conform to eGov SSO spec', () => {
-  const partnerCode = 'a101db722afd40a2b33d39ed14b274e5'
-  const partnerSecret = 'bfacc31fe03042ccbd843ffd44b3e431'
   const exchangeCode = '802d20idlNst3YNSVjuMKWV9q7LVESCI'
 
   const tokenPayload = {
@@ -85,12 +91,11 @@ test('Token exchange and profile fetch payload structures conform to eGov SSO sp
 
   assert.equal(tokenPayload.exchange_code, '802d20idlNst3YNSVjuMKWV9q7LVESCI')
   assert.equal(tokenPayload.scope, 'SSO_AUTHENTICATION')
-  assert.equal(tokenPayload.partner_code, 'a101db722afd40a2b33d39ed14b274e5')
-  assert.equal(tokenPayload.partner_secret, 'bfacc31fe03042ccbd843ffd44b3e431')
+  assert.equal(tokenPayload.partner_code, partnerCode)
+  assert.equal(tokenPayload.partner_secret, partnerSecret)
 })
 
 test('Appendix A OTP and PIN payload schemas conform to spec', () => {
-  const partnerCode = 'a101db722afd40a2b33d39ed14b274e5'
   const username = '+639090000001'
 
   // A1: Check Access

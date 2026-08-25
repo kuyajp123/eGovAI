@@ -74,10 +74,10 @@ export class EGovAuthenticationError extends Error {
 }
 
 const getPartnerCode = (): string =>
-  import.meta.env.VITE_EGOV_PARTNER_CODE || EGOV_CONFIG.partnerCode || 'a101db722afd40a2b33d39ed14b274e5'
+  import.meta.env.VITE_EGOV_PARTNER_CODE || EGOV_CONFIG.partnerCode
 
 const getPartnerSecret = (): string =>
-  import.meta.env.VITE_EGOV_PARTNER_SECRET || EGOV_CONFIG.partnerSecret || 'bfacc31fe03042ccbd843ffd44b3e431'
+  import.meta.env.VITE_EGOV_PARTNER_SECRET || EGOV_CONFIG.partnerSecret
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase()
 
@@ -201,10 +201,7 @@ export const fetchEGovProfile = async (accessToken: string): Promise<EGovProfile
       'Content-Type': 'application/json',
       Authorization: `Bearer ${cleanToken}`,
     },
-    body: JSON.stringify({
-      partner_code: getPartnerCode(),
-      partner_secret: getPartnerSecret(),
-    }),
+    body: JSON.stringify({}),
   })
 
   const responseBody = (await profileResponse.json().catch(() => ({}))) as EGovProfileResponse

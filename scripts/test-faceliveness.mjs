@@ -1,8 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-const BASE_URL = 'https://platforms-api.e.gov.ph/face-liveness'
-const TOKEN = '94b20c174123447b89f0469bac898925'
+if (typeof process.loadEnvFile === 'function') {
+  try {
+    process.loadEnvFile()
+  } catch {}
+}
+
+const BASE_URL = process.env.VITE_FACELIVENESS_URL || 'https://platforms-api.e.gov.ph/face-liveness'
+const TOKEN = process.env.VITE_FACELIVENESS_TOKEN || 'mock_face_liveness_token'
 const CONFIDENCE_THRESHOLD = 95.0
 
 test('Face Liveness session creation request payload matches schema', () => {
@@ -59,8 +65,8 @@ test('Face Liveness authentication header configurations', () => {
     Authorization: `Bearer ${TOKEN}`,
   }
 
-  assert.equal(headers['x-api-key'], '94b20c174123447b89f0469bac898925')
-  assert.equal(headers.Authorization, 'Bearer 94b20c174123447b89f0469bac898925')
+  assert.equal(headers['x-api-key'], TOKEN)
+  assert.equal(headers.Authorization, `Bearer ${TOKEN}`)
 })
 
 console.log('✅ All Face Liveness tests passed!')

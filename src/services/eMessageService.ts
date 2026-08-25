@@ -5,7 +5,7 @@
 // ============================================================
 
 const EMESSAGE_BASE = '/emessage-api'
-const EMESSAGE_TOKEN = import.meta.env.VITE_EMESSAGE_ACCESS_TOKEN
+const EMESSAGE_TOKEN = import.meta.env.VITE_EMESSAGE_TOKEN || import.meta.env.VITE_EMESSAGE_ACCESS_TOKEN || ''
 
 export interface SMSPayload {
   /** Recipient mobile in E.164 format, e.g. +639171234567 */
@@ -29,7 +29,7 @@ export const sendSMS = async (payload: SMSPayload): Promise<SMSResult> => {
     return { success: false, message: 'Invalid mobile number.' }
   }
 
-  const useMock = import.meta.env.VITE_USE_MOCK_SERVICES !== 'false'
+  const useMock = import.meta.env.VITE_USE_MOCK_SERVICES === 'true'
 
   if (!useMock) {
     try {

@@ -21,9 +21,9 @@ export default defineConfig(({ mode }) => {
         rewrite: (path) => path.replace(/^\/egov-api/, ''),
         secure: true,
       },
-      // eGov AI Core — chat completions
+      // eGov AI Core — chat completions, tourism, speech, laws, translator
       '/integration-api': {
-        target: 'https://egov-ai-core-ws.oueg.info',
+        target: 'https://platforms-api.e.gov.ph/egov-ai',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/integration-api/, ''),
         secure: true,
@@ -37,7 +37,7 @@ export default defineConfig(({ mode }) => {
       },
       // eMessage — SMS / notification delivery
       '/emessage-api': {
-        target: 'https://ws-message.e.gov.ph',
+        target: 'https://platforms-api.e.gov.ph/emessage',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/emessage-api/, ''),
         secure: true,
