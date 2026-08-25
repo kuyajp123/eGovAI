@@ -65,7 +65,7 @@ export default defineConfig(({ mode }) => {
       },
       // DBM Transparency (Compass API) — SAAODB, NCA, SARO, LGSF records
       '/compass-api': {
-        target: 'https://dbm-ws.oueg.info',
+        target: 'https://platforms-api.e.gov.ph/compass',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/compass-api/, ''),
         secure: true,

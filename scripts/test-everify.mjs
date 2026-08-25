@@ -11,9 +11,7 @@ if (typeof process.loadEnvFile === 'function') {
 const EVERIFY_BASE = process.env.VITE_EVERIFY_URL || 'https://platforms-api.e.gov.ph/everify'
 const CLIENT_ID = process.env.VITE_EVERIFY_CLIENT_ID || 'mock_client_id'
 const CLIENT_SECRET = process.env.VITE_EVERIFY_CLIENT_SECRET || 'mock_client_secret'
-const PUBKEY =
-  process.env.VITE_EVERIFY_PUBKEY ||
-  'eyJpdiI6InAzOGc3d1BZcVVZck1IY3plS0xscVE9PSIsInZhbHVlIjoiSlRESmdFYkZ4ZnV3M1ZkUjFiTHpDUT09IiwibWFjIjoiZTEzZjI5ZGRkZTVhNWNkNGU3ZmQ0NDY4MTAyZDY2Yjc1NjJiYmMxNTMwN2E2NzVlZmM5ZjhjZmEyZWM1ZmMwMCIsInRhZyI6IiJ9'
+const PUBKEY = process.env.VITE_EVERIFY_PUBKEY || ''
 
 test('eVerify Auth payload schema complies with specification', () => {
   const authPayload = {

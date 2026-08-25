@@ -8,7 +8,8 @@ if (typeof process.loadEnvFile === 'function') {
 }
 
 const baseUrl = process.env.VITE_EREPORT_URL || 'https://platforms-api.e.gov.ph/ereport'
-const accessCode = process.env.VITE_EREPORT_ACCESS_CODE || 'cb8da149b1304007b3b7b936e5655937'
+const accessCode =
+  process.env.VITE_EREPORT_ACCESS_CODE || process.env.VITE_EREPORT_ACCESS_TOKEN || ''
 
 let token = ''
 

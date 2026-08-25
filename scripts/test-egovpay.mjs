@@ -12,7 +12,7 @@ const token = process.env.VITE_EGOVPAY_TOKEN || process.env.VITE_EGOVPAY_API_KEY
 const settlementUuid =
   process.env.VITE_EGOVPAY_SETTLEMENT_TEMPLATE_UUID ||
   process.env.VITE_EGOVPAY_SETTLEMENT_UUID ||
-  '865e2d78-d711-4619-97ed-2c3e5903cf6b'
+  ''
 
 test('1. eGovPay HMAC-SHA256 digest computation', () => {
   const amount = 1000
