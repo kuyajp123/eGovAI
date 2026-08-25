@@ -1,150 +1,136 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { User } from '../types/user';
+import { useEffect, useState, useRef } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { authenticateWithEGovExchangeCode, EGovAuthenticationError } from '../services/eGovAuthService'
 
 const SSOCallbackPage = () => {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const { login } = useAuth();
-  const [status, setStatus] = useState<'processing' | 'error'>('processing');
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const { login } = useAuth()
+  const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing')
+  const [errorMessage, setErrorMessage] = useState<string>('')
+  const [stepText, setStepText] = useState<string>('Redeeming eGovPH exchange code...')
+  const processedRef = useRef(false)
 
   useEffect(() => {
-    handleSSOCallback();
-  }, []);
+    if (processedRef.current) return
+    processedRef.current = true
+    handleSSOCallback()
+  }, [])
 
   const handleSSOCallback = async () => {
-    try {
-      const exchangeCode = searchParams.get('exchange_code');
+    const exchangeCode = searchParams.get('exchange_code')
 
-      if (!exchangeCode) {
-        setStatus('error');
-        setErrorMessage('Missing exchange_code parameter');
-        return;
-      }
-
-      // ── Step 1: Exchange code → access_token ──────────────────────────────
-      const tokenRes = await fetch('/egov-api/api/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          exchange_code: exchangeCode,
-          scope: 'SSO_AUTHENTICATION',
-          partner_code: import.meta.env.VITE_EGOV_PARTNER_CODE,
-          partner_secret: import.meta.env.VITE_EGOV_PARTNER_SECRET,
-        }),
-      });
-
-      if (!tokenRes.ok) {
-        const err = await tokenRes.json().catch(() => ({}));
-        throw new Error(err.message || err.error_description || `Token exchange failed (${tokenRes.status})`);
-      }
-
-      const tokenData = await tokenRes.json();
-      console.log('SSO token response:', tokenData);
-
-      const accessToken = tokenData.access_token;
-      if (!accessToken) {
-        throw new Error('No access_token returned from eGovPH');
-      }
-
-      // ── Step 2: Use access_token → fetch user profile ─────────────────────
-      const profileRes = await fetch('/egov-api/api/partner/sso_authentication', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          partner_code: import.meta.env.VITE_EGOV_PARTNER_CODE,
-          partner_secret: import.meta.env.VITE_EGOV_PARTNER_SECRET,
-        }),
-      });
-
-      if (!profileRes.ok) {
-        const err = await profileRes.json().catch(() => ({}));
-        throw new Error(err.message || err.error_description || `Profile fetch failed (${profileRes.status})`);
-      }
-
-      const profile = await profileRes.json();
-      console.log('SSO profile response:', profile);
-
-      // eGovPH may nest user data under a key — unwrap if needed
-      const d = profile.data || profile.user || profile;
-
-      // ── Step 3: Build & store the user object ─────────────────────────────
-      const user: User = {
-        id: d.uniqid || d.user_id || d.id || exchangeCode,
-        uniqid: d.uniqid || d.user_id || d.id || '',
-        firstName: d.first_name || d.firstName || '',
-        middleName: d.middle_name || d.middleName,
-        lastName: d.last_name || d.lastName || '',
-        suffix: d.suffix,
-        birthdate: d.birthdate || d.birth_date || '',
-        email: d.email || '',
-        mobileNumber: d.mobile_number || d.mobileNumber || d.phone || d.mobile || '+639531771034',
-        address: {
-          street: d.address?.street || d.street,
-          barangay: d.address?.barangay || d.barangay,
-          city: d.address?.city || d.city || '',
-          province: d.address?.province || d.province || '',
-          region: d.address?.region || d.region || '',
-          zipCode: d.address?.zip_code || d.address?.zipCode || d.zip_code,
-        },
-        registeredAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString(),
-        profileLocked: true,
-        ssoProvider: 'egovph',
-      };
-
-      login(user);
-      navigate('/home', { replace: true });
-    } catch (error) {
-      console.error('SSO callback error:', error);
-      setStatus('error');
-      setErrorMessage(error instanceof Error ? error.message : 'Authentication failed');
+    if (!exchangeCode) {
+      setStatus('error')
+      setErrorMessage(
+        'Missing exchange_code in URL. Please access this page from the eGovPH app or via an authorized SSO redirect.'
+      )
+      return
     }
-  };
+
+    try {
+      setStatus('processing')
+      setStepText('Connecting to eGovPH SSO Gateway...')
+
+      const user = await authenticateWithEGovExchangeCode(exchangeCode)
+
+      setStepText('Welcome! Synchronizing citizen profile...')
+      setStatus('success')
+
+      login(user)
+
+      // Short delay for smooth transition
+      setTimeout(() => {
+        navigate('/home', { replace: true })
+      }, 700)
+    } catch (error) {
+      console.error('eGov SSO callback error:', error)
+      setStatus('error')
+      if (error instanceof EGovAuthenticationError) {
+        setErrorMessage(error.message)
+      } else if (error instanceof Error) {
+        setErrorMessage(error.message)
+      } else {
+        setErrorMessage('Failed to authenticate with eGovPH SSO.')
+      }
+    }
+  }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-margin-mobile bg-gradient-to-br from-primary/5 to-secondary/5">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8 bg-gradient-to-br from-primary/5 via-surface to-secondary/5">
+      <div className="max-w-md w-full bg-surface-container-lowest rounded-3xl shadow-xl border border-outline-variant/30 p-8 text-center animate-fadeIn">
         {status === 'processing' && (
-          <>
-            <div className="w-20 h-20 bg-primary-container rounded-full flex items-center justify-center mx-auto mb-6">
-              <span className="material-symbols-outlined text-5xl text-on-primary-container animate-spin">
-                progress_activity
+          <div className="space-y-6">
+            <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full bg-primary/10 animate-ping opacity-75"></div>
+              <div className="relative w-16 h-16 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20 text-white">
+                <span className="material-symbols-outlined text-3xl animate-spin">
+                  progress_activity
+                </span>
+              </div>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-on-surface">eGovPH Single Sign-On</h2>
+              <p className="text-sm text-on-surface-variant mt-2">{stepText}</p>
+            </div>
+            <div className="w-full bg-surface-container-high rounded-full h-1.5 overflow-hidden">
+              <div className="bg-primary h-full rounded-full w-2/3 animate-pulse"></div>
+            </div>
+            <p className="text-[11px] text-on-surface-variant/80">
+              Government-grade encryption • PhilSys Verified Identity
+            </p>
+          </div>
+        )}
+
+        {status === 'success' && (
+          <div className="space-y-6">
+            <div className="w-20 h-20 bg-tertiary-container rounded-2xl flex items-center justify-center mx-auto text-on-tertiary-container shadow-lg">
+              <span className="material-symbols-outlined text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                check_circle
               </span>
             </div>
-            <h2 className="text-2xl font-bold text-on-surface mb-3">Authenticating...</h2>
-            <p className="text-on-surface-variant">Please wait while we securely verify your eGovPH credentials.</p>
-          </>
+            <div>
+              <h2 className="text-2xl font-bold text-on-surface">Citizen Authenticated</h2>
+              <p className="text-sm text-on-surface-variant mt-2">Redirecting to your dashboard...</p>
+            </div>
+          </div>
         )}
 
         {status === 'error' && (
-          <>
-            <div className="w-20 h-20 bg-error-container rounded-full flex items-center justify-center mx-auto mb-6">
-              <span
-                className="material-symbols-outlined text-5xl text-on-error-container"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
+          <div className="space-y-6">
+            <div className="w-20 h-20 bg-error-container rounded-2xl flex items-center justify-center mx-auto text-on-error-container shadow-md">
+              <span className="material-symbols-outlined text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>
                 error
               </span>
             </div>
-            <h2 className="text-2xl font-bold text-on-surface mb-3">Authentication Failed</h2>
-            <p className="text-on-surface-variant mb-6">{errorMessage}</p>
-            <button
-              onClick={() => navigate('/', { replace: true })}
-              className="bg-primary text-white h-12 px-8 rounded-full font-bold active:scale-95 transition-all"
-            >
-              Return to Home
-            </button>
-          </>
+            <div>
+              <h2 className="text-2xl font-bold text-on-surface">Authentication Failed</h2>
+              <p className="text-sm text-on-surface-variant mt-2 leading-relaxed">{errorMessage}</p>
+            </div>
+            <div className="flex flex-col gap-3 pt-2">
+              <button
+                onClick={() => {
+                  processedRef.current = false
+                  handleSSOCallback()
+                }}
+                className="w-full h-12 bg-primary text-white font-bold rounded-full shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-lg">refresh</span>
+                Try Again
+              </button>
+              <button
+                onClick={() => navigate('/', { replace: true })}
+                className="w-full h-12 border border-outline-variant text-on-surface font-semibold rounded-full hover:bg-surface-container active:scale-95 transition-all"
+              >
+                Return to Login
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default SSOCallbackPage;
+export default SSOCallbackPage

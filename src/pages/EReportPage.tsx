@@ -520,7 +520,7 @@ const EReportPage = () => {
             >
               <span className="material-symbols-outlined text-xl">send</span>
               {isSubmitting
-                ? 'Submitting to eReport API...'
+                ? 'Submitting Incident Report...'
                 : aiDraftActive
                   ? 'Review Complete — Submit Incident Report'
                   : 'Submit Incident Report'}

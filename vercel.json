@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/egov-api/:path*",
-      "destination": "https://hackathon-sso.e.gov.ph/:path*"
+      "destination": "https://platforms-api.e.gov.ph/egov-sso/:path*"
     },
     {
       "source": "/integration-api/:path*",
@@ -10,7 +10,7 @@
     },
     {
       "source": "/everify-api/:path*",
-      "destination": "https://hackathon-everify-api.e.gov.ph/:path*"
+      "destination": "https://platforms-api.e.gov.ph/everify/:path*"
     },
     {
       "source": "/emessage-api/:path*",
@@ -22,7 +22,7 @@
     },
     {
       "source": "/face-liveness-api/:path*",
-      "destination": "https://hackathon-face-liveness-api.e.gov.ph/:path*"
+      "destination": "https://platforms-api.e.gov.ph/face-liveness/:path*"
     },
     {
       "source": "/compass-api/:path*",

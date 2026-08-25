@@ -90,7 +90,7 @@ const ReviewPage = () => {
 </div>
 <div className="flex items-center gap-xs">
 <span className="material-symbols-outlined text-sm" data-icon="account_balance">account_balance</span>
-<span className="font-label-sm text-label-sm uppercase tracking-wider">GovPortal API</span>
+<span className="font-label-sm text-label-sm uppercase tracking-wider">eGovPH Verified Network</span>
 </div>
 <div className="flex items-center gap-xs">
 <span className="material-symbols-outlined text-sm" data-icon="encrypted">encrypted</span>

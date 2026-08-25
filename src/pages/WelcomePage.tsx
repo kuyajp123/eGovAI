@@ -36,7 +36,7 @@ const WelcomePage = () => {
             <span className="material-symbols-outlined text-tertiary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
               shield
             </span>
-            API-backed prototype authentication. No local user database is required.
+            Secured by official eGovPH Single Sign-On and PhilSys Biometrics.
           </p>
         </div>
         <div className="flex-1 w-full relative">

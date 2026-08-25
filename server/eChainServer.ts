@@ -1,4 +1,4 @@
-import { JsonRpcProvider, Wallet } from 'ethers'
+import process from 'node:process'
 
 const DEFAULT_RPC_URL = 'https://hackathon-blockchain.e.gov.ph'
 const DEFAULT_EXPLORER_URL = 'https://hackathon-explorer.e.gov.ph'
@@ -85,24 +85,28 @@ export const getEChainConfiguration = (): EChainConfiguration => {
   }
 }
 
-export const isSha256Hex = (value: string): boolean => /^[0-9a-fA-F]{64}$/.test(value)
-export const isTransactionHash = (value: string): boolean => /^0x[0-9a-fA-F]{64}$/.test(value)
+export const isSha256Hex = (value: unknown): value is string =>
+  typeof value === 'string' && /^[0-9a-fA-F]{64}$/.test(value.trim())
 
-export const buildExplorerTransactionUrl = (template: string, transactionHash: string): string =>
-  template.includes('{txHash}')
-    ? template.replace('{txHash}', transactionHash)
-    : `${template.replace(/\/$/, '')}/${transactionHash}`
+export const isTransactionHash = (value: unknown): value is string =>
+  typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value.trim())
+
+const buildExplorerTransactionUrl = (template: string, txHash: string): string =>
+  template.replace('{txHash}', txHash)
 
 const isTemporaryNodeFailure = (error: unknown): boolean => {
-  const candidate = error as {
-    code?: string
-    message?: string
-    info?: { responseStatus?: string; responseBody?: string }
-  }
-  const details = [candidate?.code, candidate?.message, candidate?.info?.responseStatus, candidate?.info?.responseBody]
-    .filter(Boolean)
-    .join(' ')
-  return /\b(?:502|503|504)\b|bad gateway|service temporarily unavailable|gateway time-?out|ECONNRESET|ETIMEDOUT/i.test(details)
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  return (
+    message.includes('fetch') ||
+    message.includes('econnrefused') ||
+    message.includes('enotfound') ||
+    message.includes('timeout') ||
+    message.includes('etimedout') ||
+    message.includes('502') ||
+    message.includes('503') ||
+    message.includes('504') ||
+    message.includes('network')
+  )
 }
 
 export const verifyPaidEGovPayTransaction = async (
@@ -165,14 +169,53 @@ export const verifyPaidEGovPayTransaction = async (
   }
 }
 
+// Helper to load ethers dynamically without hard build dependency
+interface EthersModule {
+  JsonRpcProvider: new (url: string, chainId?: number) => {
+    getNetwork: () => Promise<{ chainId: bigint | number }>
+    getTransactionReceipt: (txHash: string) => Promise<{
+      status: number | null
+      blockNumber: number
+      confirmations: () => Promise<number>
+    } | null>
+  }
+  Wallet: new (privateKey: string, provider: unknown) => {
+    address: string
+    sendTransaction: (tx: {
+      to: string
+      value: bigint
+      data: string
+      gasPrice: bigint
+      gasLimit: bigint
+      type: number
+      chainId: number
+    }) => Promise<{ hash: string }>
+  }
+}
+
+const loadEthersModule = async (): Promise<EthersModule> => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ethers = (await import('ethers')) as any
+    return ethers
+  } catch {
+    throw new EChainServerError(
+      'ethers library is not installed. Install ethers to enable eGovChain ledger anchoring.',
+      500,
+      'ETHERS_NOT_AVAILABLE'
+    )
+  }
+}
+
 export const submitDonationBlockHash = async (blockHash: string): Promise<SubmittedAnchor> => {
   if (!isSha256Hex(blockHash)) {
     throw new EChainServerError('A valid 64-character SHA-256 block hash is required.', 400, 'INVALID_BLOCK_HASH')
   }
 
   const configuration = getEChainConfiguration()
-  const provider = new JsonRpcProvider(configuration.rpcUrl, configuration.chainId)
-  const wallet = new Wallet(configuration.privateKey, provider)
+  const ethers = await loadEthersModule()
+  const provider = new ethers.JsonRpcProvider(configuration.rpcUrl, configuration.chainId)
+  const wallet = new ethers.Wallet(configuration.privateKey, provider)
 
   try {
     const network = await provider.getNetwork()
@@ -224,7 +267,8 @@ export const getAnchorTransactionStatus = async (transactionHash: string): Promi
   }
 
   const configuration = getEChainConfiguration()
-  const provider = new JsonRpcProvider(configuration.rpcUrl, configuration.chainId)
+  const ethers = await loadEthersModule()
+  const provider = new ethers.JsonRpcProvider(configuration.rpcUrl, configuration.chainId)
   try {
     const receipt = await provider.getTransactionReceipt(transactionHash)
     const explorerUrl = buildExplorerTransactionUrl(configuration.explorerTransactionTemplate, transactionHash)

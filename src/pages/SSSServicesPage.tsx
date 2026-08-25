@@ -255,9 +255,9 @@ const SSSServicesPage = () => {
             <div className="w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto shadow-inner">
               <span className="material-symbols-outlined text-3xl">verified_user</span>
             </div>
-            <h2 className="text-lg font-bold text-on-surface">PhilSys eVerify Identity Check</h2>
+            <h2 className="text-lg font-bold text-on-surface">PhilSys Identity Verification</h2>
             <p className="text-xs text-on-surface-variant max-w-sm mx-auto">
-              Per SSS security regulations, identity verification via <strong>PhilSys eVerify</strong> and <strong>Face Liveness Web SDK</strong> is required before proceeding.
+              Per SSS security regulations, identity verification via <strong>PhilSys National ID</strong> and <strong>Face Biometric Check</strong> is required before proceeding.
             </p>
           </div>
 

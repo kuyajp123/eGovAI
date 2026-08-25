@@ -1321,7 +1321,7 @@ const AIChatHome = () => {
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: transparencyResult.aiSummaryText ?? 'Here is the budget transparency data from the DBM Compass API.',
+          content: transparencyResult.aiSummaryText ?? 'Here is the official budget transparency data from the Department of Budget and Management.',
           timestamp: new Date(),
           transparencyResult,
         };
@@ -2998,7 +2998,7 @@ const AIChatHome = () => {
                             </span>
                             <div className="text-white">
                               <p className="text-xs font-bold leading-none">DBM Transparency Portal</p>
-                              <p className="text-[10px] opacity-80 mt-0.5">Live data · Compass API</p>
+                              <p className="text-[10px] opacity-80 mt-0.5">Official Government Budget Records</p>
                             </div>
                           </div>
                           <span className="px-2.5 py-1 rounded-full bg-white/20 text-white text-[9px] font-bold uppercase tracking-wide backdrop-blur-sm">
@@ -3234,7 +3234,7 @@ const AIChatHome = () => {
                         {/* Footer source attribution */}
                         <div className="bg-slate-50 border-t border-slate-100 px-4 py-2 flex items-center justify-between">
                           <span className="text-[9px] text-on-surface-variant font-medium">
-                            Source: DBM Transparency Portal · Compass API
+                            Source: Department of Budget and Management (DBM Transparency Portal)
                           </span>
                           <a
                             href="https://www.dbm.gov.ph"
@@ -3269,7 +3269,7 @@ const AIChatHome = () => {
                             <h4 className="text-sm font-bold text-blue-900">Available DBM Transparency Datasets</h4>
                           </div>
                           <p className="text-[10px] text-blue-700/80">
-                            Ask me about any of these datasets and I'll fetch live data from the DBM Compass API.
+                            Ask me about any of these datasets to view verified government budget allocation records.
                           </p>
                         </div>
 

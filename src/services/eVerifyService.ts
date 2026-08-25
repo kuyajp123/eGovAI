@@ -6,21 +6,26 @@
 // ============================================================
 
 const EVERIFY_BASE = '/everify-api'
-const CLIENT_ID = import.meta.env.VITE_EVERIFY_CLIENT_ID
-const CLIENT_SECRET = import.meta.env.VITE_EVERIFY_CLIENT_SECRET
-const PUBKEY = import.meta.env.VITE_EVERIFY_PUBKEY
+const DEFAULT_CLIENT_ID = '2339c46bf9664aa3b1c8527d22feeadd'
+const DEFAULT_CLIENT_SECRET = '94c74a6d493d4dc18df4b50bd78e58e9'
+const DEFAULT_PUBKEY =
+  'eyJpdiI6InAzOGc3d1BZcVVZck1IY3plS0xscVE9PSIsInZhbHVlIjoiSlRESmdFYkZ4ZnV3M1ZkUjFiTHpDUT09IiwibWFjIjoiZTEzZjI5ZGRkZTVhNWNkNGU3ZmQ0NDY4MTAyZDY2Yjc1NjJiYmMxNTMwN2E2NzVlZmM5ZjhjZmEyZWM1ZmMwMCIsInRhZyI6IiJ9'
+
+export interface FaceLivenessSDKResponse {
+  status: string
+  result?: {
+    photo?: string
+    session_id?: string
+    photo_url?: string
+  }
+  session_id?: string
+  photo_url?: string
+}
 
 declare global {
   interface Window {
     eKYC?: () => {
-      start: (config: { pubKey: string }) => Promise<{
-        status: string
-        result: {
-          photo: string
-          session_id: string
-          photo_url: string
-        }
-      }>
+      start: (config: { pubKey: string }) => Promise<FaceLivenessSDKResponse>
     }
   }
 }
@@ -42,6 +47,43 @@ export interface VerifyResult {
   fullAddress?: string
   mobileNumber?: string
   verifiedAt: string
+  faceLivenessSessionId?: string
+  photoUrl?: string
+}
+
+export interface LivenessResult {
+  sessionId: string
+  photoUrl?: string
+  photoBase64?: string
+}
+
+/**
+ * Dynamically loads the official eVerify Face Liveness Web SDK script if not already on the page.
+ */
+export async function ensureEVerifySDKLoaded(): Promise<void> {
+  if (typeof window === 'undefined') return
+  if (window.eKYC) return
+
+  const SCRIPT_ID = 'everify-face-liveness-sdk-script'
+  const existing = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null
+  if (existing) {
+    // Wait briefly if script is currently loading
+    return new Promise((resolve) => {
+      if (window.eKYC) return resolve()
+      existing.addEventListener('load', () => resolve())
+      setTimeout(resolve, 2000)
+    })
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.id = SCRIPT_ID
+    script.src = 'https://hackathon-everify-face-liveness.e.gov.ph/js/everify-liveness-sdk.min.js'
+    script.async = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Failed to load eVerify Face Liveness Web SDK.'))
+    document.head.appendChild(script)
+  })
 }
 
 /**
@@ -51,7 +93,6 @@ export interface VerifyResult {
 export function closeEVerifySDKModal() {
   if (typeof document === 'undefined') return
 
-  // Remove overlay elements after brief delay
   setTimeout(() => {
     // 1. Remove any iframe injected by the SDK
     const iframes = Array.from(document.querySelectorAll('iframe'))
@@ -78,31 +119,45 @@ export function closeEVerifySDKModal() {
 
 /**
  * Triggers the official eVerify Face Liveness Web SDK window (window.eKYC().start({ pubKey })).
- * Listens for postMessage from the popup as a backup channel.
  * Resolves with the COMPLETED face_liveness_session_id from the camera scan.
  */
 export async function triggerEVerifyLivenessSDK(pubKey?: string): Promise<string> {
-  const key = pubKey || PUBKEY || ''
+  const result = await startEVerifyLivenessSDK(pubKey)
+  return result.sessionId
+}
+
+/**
+ * Full start method returning session_id, photo_url, and photo payload from the Web SDK.
+ */
+export async function startEVerifyLivenessSDK(pubKey?: string): Promise<LivenessResult> {
+  const key = pubKey || import.meta.env.VITE_EVERIFY_PUBKEY || DEFAULT_PUBKEY
 
   if (typeof window === 'undefined') {
     throw new Error('Window environment required for Face Liveness SDK.')
   }
 
+  await ensureEVerifySDKLoaded().catch((err) => {
+    console.warn('SDK script load notice:', err)
+  })
+
   // Clear any old consumed token before starting a new scan
   localStorage.removeItem('egov_liveness_token')
 
-  return new Promise<string>((resolve, reject) => {
+  return new Promise<LivenessResult>((resolve, reject) => {
     let resolved = false
     let timeoutHandle: ReturnType<typeof setTimeout>
 
-    const finishSuccess = (sessionId: string) => {
+    const finishSuccess = (res: LivenessResult) => {
       if (resolved) return
       resolved = true
       clearTimeout(timeoutHandle)
       window.removeEventListener('message', onMessage)
-      localStorage.setItem('egov_liveness_token', sessionId)
+      localStorage.setItem('egov_liveness_token', res.sessionId)
+      if (res.photoUrl) {
+        localStorage.setItem('egov_liveness_photo_url', res.photoUrl)
+      }
       closeEVerifySDKModal()
-      resolve(sessionId)
+      resolve(res)
     }
 
     // ── Backup channel: listen for postMessage from the eVerify popup ──────
@@ -110,13 +165,15 @@ export async function triggerEVerifyLivenessSDK(pubKey?: string): Promise<string
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
         const sessionId =
-          data?.session_id ||
           data?.result?.session_id ||
+          data?.session_id ||
           data?.data?.session_id ||
           data?.liveness_session_id
+        const photoUrl = data?.result?.photo_url || data?.photo_url
+        const photoBase64 = data?.result?.photo || data?.photo
 
         if (sessionId) {
-          finishSuccess(sessionId)
+          finishSuccess({ sessionId, photoUrl, photoBase64 })
         }
       } catch {
         // Non-JSON or unrelated postMessage — ignore
@@ -127,12 +184,16 @@ export async function triggerEVerifyLivenessSDK(pubKey?: string): Promise<string
     // ── Primary channel: eVerify SDK Popup ──────────────────────────────────
     if (window.eKYC) {
       try {
-        window.eKYC().start({ pubKey: key })
-          .then((response) => {
-            const resObj = response as any
-            const sessionId = resObj?.result?.session_id || resObj?.session_id
+        window
+          .eKYC()
+          .start({ pubKey: key })
+          .then((response: FaceLivenessSDKResponse) => {
+            const sessionId = response?.result?.session_id || response?.session_id
+            const photoUrl = response?.result?.photo_url || response?.photo_url
+            const photoBase64 = response?.result?.photo
+
             if (sessionId) {
-              finishSuccess(sessionId)
+              finishSuccess({ sessionId, photoUrl, photoBase64 })
             } else {
               console.warn('eVerify SDK returned response without session_id:', response)
             }
@@ -144,7 +205,7 @@ export async function triggerEVerifyLivenessSDK(pubKey?: string): Promise<string
                 if (!resolved) {
                   const cached = localStorage.getItem('egov_liveness_token')
                   if (cached) {
-                    finishSuccess(cached)
+                    finishSuccess({ sessionId: cached })
                   } else {
                     clearTimeout(timeoutHandle)
                     window.removeEventListener('message', onMessage)
@@ -174,7 +235,7 @@ export async function triggerEVerifyLivenessSDK(pubKey?: string): Promise<string
         window.removeEventListener('message', onMessage)
         const cached = localStorage.getItem('egov_liveness_token')
         if (cached) {
-          finishSuccess(cached)
+          finishSuccess({ sessionId: cached })
         } else {
           closeEVerifySDKModal()
           reject(new Error('Face Liveness camera scan timed out (120s). Please click "Verify Identity" to try again.'))
@@ -188,12 +249,15 @@ export async function triggerEVerifyLivenessSDK(pubKey?: string): Promise<string
  * Step 1: Obtain a server-to-server access_token from /api/auth
  */
 export async function getEVerifyAccessToken(): Promise<string> {
+  const clientId = import.meta.env.VITE_EVERIFY_CLIENT_ID || DEFAULT_CLIENT_ID
+  const clientSecret = import.meta.env.VITE_EVERIFY_CLIENT_SECRET || DEFAULT_CLIENT_SECRET
+
   const res = await fetch(`${EVERIFY_BASE}/api/auth`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
+      client_id: clientId,
+      client_secret: clientSecret,
     }),
   })
 
@@ -203,9 +267,9 @@ export async function getEVerifyAccessToken(): Promise<string> {
   }
 
   const json = await res.json()
-  const token = json.data?.access_token
+  const token = json.data?.access_token || json.access_token
   if (!token) {
-    throw new Error('eVerify Auth failed: No access_token returned.')
+    throw new Error('eVerify Auth failed: No access_token returned from gateway.')
   }
   return token
 }
@@ -220,11 +284,11 @@ export const verifyIdentity = async (payload: VerifyPayload): Promise<VerifyResu
     // 1. Get access token
     const accessToken = await getEVerifyAccessToken()
 
-    // 2. Query personal information
+    // 2. Query personal information with face_liveness_session_id
     const res = await fetch(`${EVERIFY_BASE}/api/query`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -246,15 +310,12 @@ export const verifyIdentity = async (payload: VerifyPayload): Promise<VerifyResu
       const resultGrade = meta.result_grade ?? 0
       const tierLevel = meta.tier_level || 'Tier II'
 
-      // Face Liveness session success is the primary security check.
-      // The NIDAS demographic match (data.verified) may return false for
-      // hackathon/sandbox test accounts that aren't in the real PhilSys registry.
-      // We treat a valid face_liveness_session_id as the authoritative verification.
-      const livenessVerified = !!payload.faceLivenessSessionId
+      const livenessVerified = Boolean(payload.faceLivenessSessionId)
 
       console.log(
         `[eVerify] NIDAS result: verified=${nidasVerified}, grade=${resultGrade}, tier=${tierLevel}`,
-        '| Face Liveness session:', payload.faceLivenessSessionId
+        '| Face Liveness session:',
+        payload.faceLivenessSessionId ? `${payload.faceLivenessSessionId.slice(0, 8)}...` : 'none'
       )
 
       if (!livenessVerified) {
@@ -271,22 +332,25 @@ export const verifyIdentity = async (payload: VerifyPayload): Promise<VerifyResu
         fullAddress: data.full_address,
         mobileNumber: data.mobile_number,
         verifiedAt: new Date().toISOString(),
+        faceLivenessSessionId: payload.faceLivenessSessionId,
       }
     }
 
     const errorJson = await res.json().catch(() => ({}))
-    const msg = errorJson.message || errorJson.error_description || errorJson.error || `eVerify query failed (HTTP ${res.status})`
+    const msg =
+      errorJson.message || errorJson.error_description || errorJson.error || `eVerify query failed (HTTP ${res.status})`
     throw new Error(msg)
   }
 
   // Demo / Mock mode fallback
-  await new Promise(r => setTimeout(r, 1500))
+  await new Promise((r) => setTimeout(r, 1500))
   return {
     verified: true,
     verificationId: generateVerifId(),
     message: 'Identity verified via PhilSys National ID database (Demo).',
     citizenName: `${payload.firstName} ${payload.lastName}`,
     verifiedAt: new Date().toISOString(),
+    faceLivenessSessionId: payload.faceLivenessSessionId,
   }
 }
 

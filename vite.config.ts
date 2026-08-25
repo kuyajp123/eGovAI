@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
       // eGovPH SSO — login, token exchange, profile
       '/egov-api': {
-        target: 'https://hackathon-sso.e.gov.ph',
+        target: 'https://platforms-api.e.gov.ph/egov-sso',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/egov-api/, ''),
         secure: true,
@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => {
       },
       // eVerify — identity verification (PhilSys)
       '/everify-api': {
-        target: 'https://hackathon-everify-api.e.gov.ph',
+        target: 'https://platforms-api.e.gov.ph/everify',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/everify-api/, ''),
         secure: true,
@@ -51,7 +51,7 @@ export default defineConfig(({ mode }) => {
       },
       // Face Liveness REST API (session creation + result retrieval)
       '/face-liveness-api': {
-        target: 'https://hackathon-face-liveness-api.e.gov.ph',
+        target: 'https://platforms-api.e.gov.ph/face-liveness',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/face-liveness-api/, ''),
         secure: true,

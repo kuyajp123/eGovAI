@@ -62,48 +62,9 @@ let tokenExpiry: number | null = null;
  */
 export const exchangeCodeForUserData = async (exchangeCode: string): Promise<ExchangeCodeResponse> => {
   try {
-    // Exchange code for access token via eGovPH API
-    const tokenResponse = await fetch(`/egov-api/api/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        exchange_code: exchangeCode,
-        scope: 'SSO_AUTHENTICATION',
-        partner_code: import.meta.env.VITE_EGOV_PARTNER_CODE,
-        partner_secret: import.meta.env.VITE_EGOV_PARTNER_SECRET,
-      }),
-    });
-
-    if (!tokenResponse.ok) {
-      const errorData = await tokenResponse.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Failed to exchange code for token');
-    }
-
-    const data = await tokenResponse.json();
-
-    // Map eGovPH response to our EGovUser format
-    const egovUser: EGovUser = {
-      uniqid: data.uniqid || data.user_id || data.id,
-      firstName: data.first_name || data.firstName,
-      middleName: data.middle_name || data.middleName,
-      lastName: data.last_name || data.lastName,
-      suffix: data.suffix,
-      birthdate: data.birthdate || data.birth_date,
-      email: data.email,
-      mobileNumber: '+639531771034',
-      address: {
-        street: data.address?.street || data.street,
-        barangay: data.address?.barangay || data.barangay,
-        city: data.address?.city || data.city,
-        province: data.address?.province || data.province,
-        region: data.address?.region || data.region,
-        zipCode: data.address?.zip_code || data.zipCode,
-      },
-    };
-
-    return { success: true, data: egovUser };
+    const { authenticateWithEGovExchangeCode } = await import('./eGovAuthService');
+    const user = await authenticateWithEGovExchangeCode(exchangeCode);
+    return { success: true, data: user };
   } catch (error) {
     console.error('Exchange code error:', error);
     return {

@@ -1,11 +1,11 @@
-import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
 import anchorHandler from '../api/echain/anchor.js'
 import statusHandler from '../api/echain/status.js'
 
 const MAX_REQUEST_BYTES = 64 * 1024
 
-const readJsonBody = async (request: IncomingMessage): Promise<unknown> => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const readJsonBody = async (request: any): Promise<unknown> => {
   const chunks: string[] = []
   let totalBytes = 0
   for await (const chunk of request) {
@@ -18,7 +18,8 @@ const readJsonBody = async (request: IncomingMessage): Promise<unknown> => {
   return JSON.parse(chunks.join('')) as unknown
 }
 
-const createResponseAdapter = (response: ServerResponse) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const createResponseAdapter = (response: any) => {
   const adapter = {
     status(statusCode: number) {
       response.statusCode = statusCode
@@ -42,7 +43,8 @@ export const eChainLocalApiPlugin = (): Plugin => ({
   name: 'egovchain-local-api',
   apply: 'serve',
   configureServer(server) {
-    server.middlewares.use(async (request, response, next) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    server.middlewares.use(async (request: any, response: any, next: any) => {
       const requestUrl = new URL(request.url || '/', 'http://localhost')
       const isAnchorRoute = requestUrl.pathname === '/api/echain/anchor'
       const isStatusRoute = requestUrl.pathname === '/api/echain/status'

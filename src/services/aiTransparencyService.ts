@@ -522,8 +522,8 @@ export const processTransparencyIntent = async (
       isTransparencyIntent: true,
       error: msg,
       aiSummaryText:
-        `I detected a budget transparency question, but the DBM Compass API returned an error: *${msg}*. ` +
-        `Please check your API key or try again shortly.`,
+        `I detected a budget transparency request, but encountered an issue retrieving the official records (*${msg}*). ` +
+        `Please try again shortly or refine your query.`,
     }
   }
 
