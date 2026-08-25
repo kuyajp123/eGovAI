@@ -1,6 +1,6 @@
 export const EGOV_CONFIG = {
   // Your application's base URL
-  baseUrl: import.meta.env.VITE_APP_BASE_URL || 'https://govassistant.example.com',
+  baseUrl: import.meta.env.VITE_APP_BASE_URL || 'https://ebuddy.example.com',
   
   // eGovPH SSO endpoint
   egovSsoUrl: import.meta.env.VITE_EGOV_SSO_URL || 'https://sso.egovph.gov.ph',

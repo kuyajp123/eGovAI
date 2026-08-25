@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the eGovPH Single Sign-On (SSO) integration for GovAssistant Digital Citizen Portal.
+This document describes the eGovPH Single Sign-On (SSO) integration for eBuddy Digital Citizen Portal.
 
 ## Technical Requirements
 

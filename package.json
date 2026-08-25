@@ -1,7 +1,7 @@
 {
-  "name": "govassistant",
+  "name": "ebuddy",
   "version": "1.0.0",
-  "description": "Digital Citizen Portal",
+  "description": "eBuddy - AI-Powered Digital Citizen Portal (eGovPH Integration)",
   "private": true,
   "type": "module",
   "scripts": {
