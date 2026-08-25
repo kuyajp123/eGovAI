@@ -123,15 +123,21 @@ const fallbackCampaigns: DonationCampaign[] = [
   },
 ]
 
+const getDefaultSettlementUuid = (): string | undefined =>
+  import.meta.env.VITE_EGOVPAY_SETTLEMENT_TEMPLATE_UUID ||
+  import.meta.env.VITE_EGOVPAY_SETTLEMENT_UUID ||
+  undefined
+
 const normalizeCampaign = (value: Partial<DonationCampaign>): DonationCampaign | null => {
   if (!value.id?.trim() || !value.title?.trim() || !value.recipientName?.trim()) return null
+  const defaultSettlement = getDefaultSettlementUuid()
   return {
     id: value.id.trim(),
     title: value.title.trim(),
     recipientName: value.recipientName.trim(),
     location: value.location?.trim() || 'Philippines',
     purpose: value.purpose?.trim() || 'Donation support',
-    settlementTemplateUuid: value.settlementTemplateUuid?.trim() || undefined,
+    settlementTemplateUuid: value.settlementTemplateUuid?.trim() || defaultSettlement,
     keywords: Array.isArray(value.keywords)
       ? value.keywords.map(item => String(item).trim().toLowerCase()).filter(Boolean)
       : [],
@@ -143,16 +149,35 @@ const normalizeCampaign = (value: Partial<DonationCampaign>): DonationCampaign |
 }
 
 export const getDonationCampaigns = (): DonationCampaign[] => {
+  const defaultSettlement = getDefaultSettlementUuid()
   const configured = import.meta.env.VITE_DONATION_CAMPAIGNS_JSON
-  if (!configured?.trim()) return fallbackCampaigns.map(campaign => ({ ...campaign }))
+  if (!configured?.trim()) {
+    return fallbackCampaigns.map(campaign => ({
+      ...campaign,
+      settlementTemplateUuid: campaign.settlementTemplateUuid || defaultSettlement,
+    }))
+  }
   try {
     const parsed = JSON.parse(configured) as Partial<DonationCampaign>[]
-    if (!Array.isArray(parsed)) return fallbackCampaigns.map(campaign => ({ ...campaign }))
+    if (!Array.isArray(parsed)) {
+      return fallbackCampaigns.map(campaign => ({
+        ...campaign,
+        settlementTemplateUuid: campaign.settlementTemplateUuid || defaultSettlement,
+      }))
+    }
     const campaigns = parsed.map(normalizeCampaign).filter((campaign): campaign is DonationCampaign => !!campaign)
-    return campaigns.length ? campaigns : fallbackCampaigns.map(campaign => ({ ...campaign }))
+    return campaigns.length
+      ? campaigns
+      : fallbackCampaigns.map(campaign => ({
+          ...campaign,
+          settlementTemplateUuid: campaign.settlementTemplateUuid || defaultSettlement,
+        }))
   } catch (error) {
     console.warn('VITE_DONATION_CAMPAIGNS_JSON is invalid:', error)
-    return fallbackCampaigns.map(campaign => ({ ...campaign }))
+    return fallbackCampaigns.map(campaign => ({
+      ...campaign,
+      settlementTemplateUuid: campaign.settlementTemplateUuid || defaultSettlement,
+    }))
   }
 }
 

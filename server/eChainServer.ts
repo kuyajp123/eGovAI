@@ -3,7 +3,7 @@ import process from 'node:process'
 const DEFAULT_RPC_URL = 'https://hackathon-blockchain.e.gov.ph'
 const DEFAULT_EXPLORER_URL = 'https://hackathon-explorer.e.gov.ph'
 const DEFAULT_CHAIN_ID = 13_371
-const DEFAULT_EGOVPAY_URL = 'https://egovpay-pgi-ws-dev.oueg.info'
+const DEFAULT_EGOVPAY_URL = 'https://platforms-api.e.gov.ph/egovpay'
 
 export class EChainServerError extends Error {
   statusCode: number
@@ -113,11 +113,12 @@ export const verifyPaidEGovPayTransaction = async (
   paymentId: string,
   expectedAmount: number
 ): Promise<VerifiedPayment> => {
-  const apiKey = requiredEnvironmentValue(
-    ['EGOVPAY_API_KEY', 'VITE_EGOVPAY_API_KEY'],
-    'Server-side eGovPay verification is not configured. Add EGOVPAY_API_KEY in Vercel.'
+  const rawApiKey = requiredEnvironmentValue(
+    ['EGOVPAY_TOKEN', 'VITE_EGOVPAY_TOKEN', 'EGOVPAY_API_KEY', 'VITE_EGOVPAY_API_KEY'],
+    'Server-side eGovPay verification is not configured. Add EGOVPAY_TOKEN or VITE_EGOVPAY_TOKEN.'
   )
-  const baseUrl = (process.env.EGOVPAY_API_URL || DEFAULT_EGOVPAY_URL).replace(/\/$/, '')
+  const apiKey = rawApiKey.startsWith('test_') ? rawApiKey : `test_${rawApiKey}`
+  const baseUrl = (process.env.EGOVPAY_API_URL || process.env.VITE_EGOVPAY_URL || DEFAULT_EGOVPAY_URL).replace(/\/$/, '')
   let response: Response
   try {
     response = await fetch(`${baseUrl}/api/v1/transaction/${encodeURIComponent(paymentId)}`, {
@@ -125,6 +126,7 @@ export const verifyPaidEGovPayTransaction = async (
       headers: {
         Accept: 'application/json',
         'X-eGovPay-Token': apiKey,
+        'Content-Type': 'application/json; charset=utf-8',
       },
     })
   } catch {
